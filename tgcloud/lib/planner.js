@@ -25,7 +25,7 @@ import {
   dayRecipesHeader,
 } from './texts.js';
 import { getProfile, savePlan, addHistoryMany, getPlan, getSession, setSession, aiQuota } from './store.js';
-import { generatePlan, generateDayRecipes } from './ai.js';
+import { generatePlan, generateDayRecipes, generateShoppingList } from './ai.js';
 import { planOverview, shoppingListText, recipeCard } from './format.js';
 import { ensureProfile, buildAiContext } from './flows.js';
 import { WEEKDAYS_FA, WEEKLY_PLAN } from './config.js';
@@ -219,14 +219,33 @@ async function sendDayCards(chatId, n, dayRecipes, loadingMessageId = null, plan
   }
 }
 
-/** Re-send the categorized shopping list — data "pl:shop". */
+/** Re-send the categorized shopping list — data "pl:shop".
+ *  Plans ship with an EMPTY list (phase 1 stays inside the ~30s invocation
+ *  budget); the list is generated on demand here in its own invocation. */
 export async function sendShoppingList(chatId, cqId) {
   const plan = await getPlan(chatId);
   if (!plan) {
     await answerCb(cqId, 'هنوز برنامه‌ای نساختی؛ اول برنامه هفتگی بساز 📅', true);
     return;
   }
-  if (cqId) await answerCb(cqId);
+  const needsGen = !Array.isArray(plan.shoppingList) || plan.shoppingList.length === 0;
+  if (cqId) await answerCb(cqId, needsGen ? 'دارم لیست خرید رو می‌چینم... 🛒' : undefined);
+  if (needsGen) {
+    try {
+      const profile = await getProfile(chatId);
+      const session = (await getSession(chatId)) ?? {};
+      const ctx = await buildAiContext(chatId, profile, session, {});
+      const shoppingList = await generateShoppingList(ctx, plan);
+      plan.shoppingList = shoppingList;
+      await savePlan(chatId, plan); // cached — next press sends instantly
+    } catch (e) {
+      console.error('shopping list generation failed:', e?.message ?? e);
+      return await sendMessage(chatId, RECIPE_PARSE_ERROR, [
+        [{ text: '🔄 تلاش دوباره', callback_data: 'retry:shop' }],
+        [{ text: '🏠 منوی اصلی', callback_data: 'menu' }],
+      ]);
+    }
+  }
   const text = `${SHOPPING_LIST_HEADER}\n${shoppingListText(plan.shoppingList)}`;
   await sendMessage(chatId, text, planKb(plan));
 }

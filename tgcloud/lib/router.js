@@ -237,6 +237,7 @@ async function routeCallback(chatId, messageId, data, cqId) {
       if (action === 'random') return await startRandom(chatId, messageId, null);
       if (action === 'rescue') return await runRescue(chatId, messageId, session.rescueItems ?? []);
       if (action === 'plan') return await startPlan(chatId, messageId, sub2 ?? 'simple', null);
+      if (action === 'shop') return await sendShoppingList(chatId, null);
       if (action === 'day') return await sendDayRecipes(chatId, Number(sub2 ?? 0), null);
       return await showMenu(chatId, messageId);
     }

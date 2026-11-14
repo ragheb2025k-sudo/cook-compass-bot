@@ -31,11 +31,16 @@ export const AI = {
   apiKey: '', // empty for pollinations; set 'sk-or-...' / 'gsk_...' / 'AIza...' for the others
   model: 'openai',
   systemRole: 'system',
-  timeoutMs: 60000,
+  // ⏱️ THE 30-SECOND RULE: the platform kills an invocation at ~30s. This cap
+  // must stay BELOW it so the error/retry card always reaches the user —
+  // a longer timeout means the isolate dies mid-call and the user sees nothing.
+  timeoutMs: 26000,
+  MIN_RETRY_MS: 6000, // a corrective 2nd AI attempt needs this much budget left
   temperature: 0.85,
-  maxTokensRecipes: 3500,
-  maxTokensPlan: 7000,
-  maxTokensRandom: 1600,
+  maxTokensRecipes: 2200,
+  maxTokensPlan: 1400, // phase 1 = compact 7-day skeleton (names + alts only)
+  maxTokensRandom: 1000,
+  maxTokensDay: 1500,
   headers: {}, // extra auth headers (none needed for pollinations / OpenRouter / Groq / Gemini)
   extraBody: { reasoning_effort: 'low' }, // pollinations latency control — remove when switching to Groq/OpenRouter
 };

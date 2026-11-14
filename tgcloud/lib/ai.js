@@ -3,8 +3,17 @@
 // Async, timeout-guarded calls to any OpenAI-compatible chat-completions
 // endpoint (the config in lib/config.js decides which provider). The contract
 // is strict JSON output: every domain function builds a Persian prompt, parses
-// defensively (fences, stray prose), validates and normalizes the shape, and
-// retries once on malformed output — so a flaky model never crashes a flow.
+// defensively (fences, stray prose), validates and normalizes the shape.
+//
+// ⏱️ THE 30-SECOND RULE — serverless invocations are killed by the platform at
+// ~30s (observed: HTTP 500 "Invalid response from server" at ~31s), so EVERY
+// AI flow must fit inside that window. AI.timeoutMs (26s) is the hard per-call
+// cap and the wall-clock budget for chatJson's adaptive second attempt: a slow
+// first attempt leaves no room for a retry, so we fail fast into the caller's
+// error path (which still edits the loading message into a retry card) instead
+// of dying silently mid-flight. Long outputs were split into separate
+// invocations: plan phase 1 = skeleton only; the shopping list is generated on
+// demand via the 🛒 button; day recipes are already per-invocation.
 
 import { fetch } from 'sdk';
 import { AI } from './config.js';
@@ -20,7 +29,7 @@ export class AiError extends Error {}
 const HAS_ABORT_TIMEOUT =
   typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function';
 
-async function callChat({ system, user, maxTokens, temperature = AI.temperature }) {
+async function callChat({ system, user, maxTokens, temperature = AI.temperature, timeoutMs = AI.timeoutMs }) {
   // Mock provider — deterministic offline double (see lib/mock.js).
   if (AI.provider === 'mock') {
     return mockChatReply(user);
@@ -45,7 +54,7 @@ async function callChat({ system, user, maxTokens, temperature = AI.temperature 
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    ...(HAS_ABORT_TIMEOUT ? { signal: AbortSignal.timeout(AI.timeoutMs) } : {}),
+    ...(HAS_ABORT_TIMEOUT ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -68,16 +77,24 @@ function extractJson(text) {
   return JSON.parse(t.slice(start, end + 1));
 }
 
-/** chat → JSON with one corrective retry on malformed output. */
-async function chatJson(system, user, { maxTokens, temperature } = {}) {
+/** chat → JSON with an ADAPTIVE second attempt on malformed output.
+ *  The wall-clock budget is AI.timeoutMs (~26s, safely under the platform's
+ *  ~30s kill). Attempt 1 may consume the whole budget; attempt 2 runs only if
+ *  enough time remains — otherwise we throw immediately so the caller's error
+ *  card reaches the user before the invocation dies. */
+async function chatJson(system, user, { maxTokens, temperature, budgetMs = AI.timeoutMs } = {}) {
+  const t0 = Date.now();
   let lastError = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const left = budgetMs - (Date.now() - t0);
+    if (attempt > 1 && left < AI.MIN_RETRY_MS) break;
+    const timeoutMs = attempt === 1 ? budgetMs : left;
+    const prompt =
+      attempt === 1
+        ? user
+        : `${user}\n\n⚠️ خروجی قبلی JSON معتبر نبود (${lastError?.message ?? 'خطا'}). این بار فقط و فقط یک شیء JSON معتبر برگردان؛ بدون توضیح، بدون بک‌تیک، بدون متن اضافه.`;
     try {
-      const prompt =
-        attempt === 1
-          ? user
-          : `${user}\n\n⚠️ خروجی قبلی JSON معتبر نبود. این بار فقط و فقط یک شیء JSON معتبر برگردان؛ بدون توضیح، بدون بک‌تیک، بدون متن اضافه.`;
-      const raw = await callChat({ system, user: prompt, maxTokens, temperature });
+      const raw = await callChat({ system, user: prompt, maxTokens, temperature, timeoutMs });
       return extractJson(raw);
     } catch (e) {
       lastError = e;
@@ -230,10 +247,9 @@ function planUserPrompt(ctx, mode) {
   lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار و همین کلیدها:');
   lines.push(JSON.stringify({
     days: [{ n: 1, lunch: 'نام ناهار', lunch_alt: 'جایگزین ناهار', dinner: 'نام شام', dinner_alt: 'جایگزین شام', dinner_light: false }],
-    shopping_list: [{ category: 'پروتئین', items: [{ name: 'مرغ', qty: '۱ کیلوگرم' }] }],
     batch_notes: ['روز ۱ مرغ را دو برابر بپز و نصفش را فریز کن'],
   }));
-  lines.push('قواعد: day عدد ۱ تا ۷ است (۱ = شنبه)؛ دقیقاً ۷ روز؛ برای هر روز lunch، lunch_alt، dinner و dinner_alt بنویس؛ dinner_light فقط برای شام‌های سبک true باشد؛ دسته‌های shopping_list فقط از این‌ها باشند: پروتئین، سبزیجات و میوه، حبوبات و غلات، لبنیات، سایر؛ خروجی فشرده باشد.');
+  lines.push('قواعد: day عدد ۱ تا ۷ است (۱ = شنبه)؛ دقیقاً ۷ روز؛ برای هر روز lunch، lunch_alt، dinner و dinner_alt بنویس؛ dinner_light فقط برای شام‌های سبک true باشد؛ خروجی کاملاً فشرده باشد؛ لیست خرید لازم نیست (بعداً جداگانه ساخته می‌شود).');
   return lines.join('\n');
 }
 
@@ -276,31 +292,44 @@ export async function generateRandom(ctx) {
   return { recipe, funLine };
 }
 
-/** 7-day plan skeleton: day names + alternatives + aggregated categorized
- *  shopping list. Recipes are generated on demand per day (generateDayRecipes)
- *  so every serverless invocation stays short.
- *  Hard rules are validated here and one corrective retry is issued when the
- *  model violates them (rice-per-day rule, dish repetition). */
+/** 7-day plan SKELETON: day names + alternatives + light-dinner flags.
+ *  Phase 1 runs inside the ~30s serverless budget, so it generates ONLY the
+ *  compact skeleton (no shopping list — that happens on demand via the 🛒
+ *  button in its own invocation, see generateShoppingList).
+ *  Hard rules (max one rice meal per day, no dish repeated, protein quotas)
+ *  are checked deterministically; one time-aware corrective pass runs only
+ *  when the first attempt was fast enough to leave room in the budget. */
 export async function generatePlan(ctx, mode) {
   const c = buildCtx(ctx);
   const basePrompt = planUserPrompt(c, mode);
 
-  let data = null;
-  let lastIssues = [];
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const prompt = attempt === 1
-      ? basePrompt
-      : `${basePrompt}\n\n⚠️ خروجی قبلی این قواعد را نقض کرد: ${lastIssues.join('؛ ')}. این بار با رعایت دقیق همه قواعد دوباره برنامه را بچین.`;
-    data = await chatJson(CHEF_SYSTEM, prompt, {
-      maxTokens: AI.maxTokensPlan,
-      temperature: 0.75,
-    });
-    lastIssues = validatePlanDays(data, c.weeklyTargets);
-    if (lastIssues.length === 0) break;
-    console.warn('plan rule violations:', lastIssues.join(' | '));
+  const t0 = Date.now();
+  let planData = await chatJson(CHEF_SYSTEM, basePrompt, {
+    maxTokens: AI.maxTokensPlan,
+    temperature: 0.75,
+  });
+
+  let issues = validatePlanDays(planData, c.weeklyTargets);
+  if (issues.length) {
+    console.warn('plan rule violations:', issues.join(' | '));
+    const left = AI.timeoutMs - (Date.now() - t0);
+    if (left >= AI.MIN_RETRY_MS) {
+      const corrective = `${basePrompt}\n\n⚠️ خروجی قبلی این قواعد را نقض کرد: ${issues.join('؛ ')}. این بار با رعایت دقیق همه قواعد دوباره برنامه را بچین.`;
+      try {
+        const fixed = await chatJson(CHEF_SYSTEM, corrective, {
+          maxTokens: AI.maxTokensPlan,
+          temperature: 0.75,
+          budgetMs: left - 500,
+        });
+        const fixedIssues = validatePlanDays(fixed, c.weeklyTargets);
+        if (fixedIssues.length === 0 || fixedIssues.length < issues.length) planData = fixed;
+      } catch {
+        // No time or provider hiccup — ship the first plan; it is still usable.
+      }
+    }
   }
 
-  const days = asArray(data.days)
+  const days = asArray(planData.days)
     .map((d, i) => ({
       n: clampInt(d?.n, 1, 7, i + 1),
       lunch: String(d?.lunch ?? '').trim(),
@@ -310,6 +339,40 @@ export async function generatePlan(ctx, mode) {
       dinnerLight: Boolean(d?.dinner_light ?? d?.dinnerLight ?? false),
     }))
     .sort((a, b) => a.n - b.n);
+  const batchNotes = asArray(planData.batch_notes)
+    .slice(0, 6)
+    .map((n) => String(n ?? '').trim().slice(0, 220))
+    .filter(Boolean);
+  if (days.length < 5) {
+    throw new AiError('plan incomplete');
+  }
+  return { mode, days, recipes: {}, shoppingList: [], batchNotes };
+}
+
+/** Categorized weekly shopping list, generated from a saved plan. Runs in its
+ *  OWN invocation (triggered by the 🛒 لیست خرید button) so the phase-1 plan
+ *  call and this call each stay far inside the ~30s serverless budget. */
+export async function generateShoppingList(ctx, plan) {
+  const c = buildCtx(ctx);
+  const lines = ['برای این برنامه غذایی هفتگی، لیست خرید کامل و دقیق به فارسی بنویس:'];
+  lines.push(...baseContextLines(c));
+  lines.push('- مقادیر را برای تعداد نفرات ذکرشده و کل ۷ روز (۷ ناهار + ۷ شام) حساب کن.');
+  lines.push('- دسته‌ها فقط این‌ها باشند: پروتئین، سبزیجات و میوه، حبوبات و غلات، لبنیات، سایر.');
+  lines.push('- فشرده و عمل‌گرا؛ چیزی که در منو نیست نیاور.');
+  lines.push('');
+  lines.push('منوی هفته:');
+  for (const d of plan.days) {
+    lines.push(`روز ${d.n}: ناهار «${d.lunch}»، شام «${d.dinner}»${d.dinnerLight ? ' (سبک)' : ''}`);
+  }
+  lines.push('');
+  lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار و همین کلیدها:');
+  lines.push(JSON.stringify({
+    shopping_list: [{ category: 'پروتئین', items: [{ name: 'مرغ', qty: '۱ کیلوگرم' }] }],
+  }));
+  const data = await chatJson(CHEF_SYSTEM, lines.join('\n'), {
+    maxTokens: 1200,
+    temperature: 0.5,
+  });
   const shoppingList = asArray(data.shopping_list)
     .slice(0, 8)
     .map((cat) => ({
@@ -323,14 +386,8 @@ export async function generatePlan(ctx, mode) {
         .filter((i) => i.name),
     }))
     .filter((cat) => cat.items.length > 0);
-  const batchNotes = asArray(data.batch_notes)
-    .slice(0, 6)
-    .map((n) => String(n ?? '').trim().slice(0, 220))
-    .filter(Boolean);
-  if (days.length < 5 || shoppingList.length === 0) {
-    throw new AiError('plan incomplete');
-  }
-  return { mode, days, recipes: {}, shoppingList, batchNotes };
+  if (shoppingList.length === 0) throw new AiError('empty shopping list');
+  return shoppingList;
 }
 
 const RICE_DISH_RE = /پلو|چلو|کته|ته\u200cچین|ته چین|برنج|بریانی/;

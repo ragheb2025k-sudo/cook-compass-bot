@@ -278,6 +278,23 @@ export function mockChatReply(user) {
   const diet = dietFromPrompt(u);
   const targets = weeklyTargetsFromPrompt(u);
 
+  // Shopping list generation (generateShoppingList) — matched before the plan
+  // branch because its prompt also mentions «برنامه غذایی هفتگی».
+  if (u.includes('لیست خرید') && u.includes('منوی هفته')) {
+    const shoppingList = MOCK_PLAN.shopping_list
+      .map((cat) => ({
+        category: cat.category,
+        items: cat.items.filter((i) => !avoid.some((a) => i.name.includes(a)))
+          .filter((i) => !(diet === 'vegetarian' && cat.category === 'پروتئین' && MEAT_RE.test(i.name)))
+          .filter((i) => !(diet === 'no_red_meat' && RED_MEAT_RE.test(i.name))),
+      }))
+      .filter((cat) => cat.items.length > 0);
+    if (shoppingList.length === 0) {
+      shoppingList.push({ category: 'سایر', items: [{ name: 'آب', qty: 'به میزان لازم' }] });
+    }
+    return JSON.stringify({ shopping_list: shoppingList });
+  }
+
   if (u.includes('برنامه غذایی هفتگی')) {
     const plan = safePlan(avoid, diet, targets);
     return JSON.stringify({
