@@ -39,6 +39,16 @@ jobs:
       - name: Install tgcloud CLI
         run: npm ci
 
+      # A fresh CI checkout has no .tgcloud/ snapshot; push refuses to deploy
+      # to a bot it has "never synced with". fetch builds the snapshot from
+      # the cloud WITHOUT touching the working directory, so GitHub stays the
+      # source of truth and push deploys the repo's diff.
+      - name: Sync cloud snapshot (fresh checkout)
+        run: npx tgcloud fetch --no-pager
+        env:
+          CI: true
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+
       - name: Deploy modules (tgcloud push)
         run: npx tgcloud push --no-pager
         env:
