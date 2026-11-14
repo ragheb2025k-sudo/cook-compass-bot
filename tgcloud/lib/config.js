@@ -38,11 +38,13 @@ export const AI = {
   MIN_RETRY_MS: 6000, // a corrective 2nd AI attempt needs this much budget left
   temperature: 0.85,
   maxTokensRecipes: 2200,
-  maxTokensPlan: 1400, // phase 1 = compact 7-day skeleton (names + alts only)
+  maxTokensPlan: 1100, // phase 1 = compact 7-day skeleton (names + alts only)
   maxTokensRandom: 1000,
   maxTokensDay: 1500,
   headers: {}, // extra auth headers (none needed for pollinations / OpenRouter / Groq / Gemini)
-  extraBody: { reasoning_effort: 'low' }, // pollinations latency control — remove when switching to Groq/OpenRouter
+  // referrer marks web-app traffic — pollinations gives it a steadier
+  // anonymous seed (fewer 402 bursts); reasoning_effort caps thinking time.
+  extraBody: { reasoning_effort: 'low', referrer: 'CookCompassBot' },
 };
 
 // ---------------------------------------------------------------------------
