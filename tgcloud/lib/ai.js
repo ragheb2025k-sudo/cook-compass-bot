@@ -50,20 +50,43 @@ async function callChat({ system, user, maxTokens, temperature = AI.temperature,
     ...AI.headers,
   };
   if (AI.apiKey) headers.Authorization = `Bearer ${AI.apiKey}`;
-  const res = await fetch(`${AI.baseUrl}${AI.chatPath ?? '/chat/completions'}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    ...(HAS_ABORT_TIMEOUT ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new AiError(`AI HTTP ${res.status}: ${detail.slice(0, 300)}`);
+
+  // The whole exchange (request + status + body + extraction) runs inside one
+  // Promise.race with a hard setTimeout stop. The runtime's fetch has been
+  // OBSERVED to ignore AbortSignal — without the race, a slow provider hangs
+  // past the cap until the platform kills the whole invocation (~30s) and the
+  // user sees nothing. The race returns control at timeoutMs no matter what,
+  // so the caller's error/retry card always lands. AbortSignal stays as belt:
+  // it frees the socket early on runtimes that DO honor it.
+  const work = (async () => {
+    const res = await fetch(`${AI.baseUrl}${AI.chatPath ?? '/chat/completions'}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      ...(HAS_ABORT_TIMEOUT ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new AiError(`AI HTTP ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content || !String(content).trim()) throw new AiError('AI empty response');
+    return String(content);
+  })();
+
+  let killTimer = null;
+  try {
+    return await Promise.race([
+      work,
+      new Promise((_, reject) => {
+        killTimer = setTimeout(() => reject(new AiError(`AI timeout after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(killTimer);
+    work.catch(() => {}); // orphaned request must never become an unhandled rejection
   }
-  const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content || !String(content).trim()) throw new AiError('AI empty response');
-  return String(content);
 }
 
 /** Pull the first JSON object out of arbitrary model prose. */
