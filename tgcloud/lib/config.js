@@ -92,29 +92,72 @@ export const HISTORY_DAYS = 14;
 export const RECIPES_PER_ROUND = 3;
 
 // ---------------------------------------------------------------------------
-// "What do I have at home?" — the low-friction pantry grid (2 items per row).
-// Deliberately home-wide (fridge + cupboard + freezer): rice, pasta and
-// legumes live in the cupboard, not the fridge.
+// "What do I have at home?" — the low-friction pantry grid (3 items per row).
+// Deliberately GENERIC: everyday Iranian household staples only — the stuff a
+// normal kitchen actually has (fridge + cupboard + freezer). No exotic,
+// niche or seasonal items that most homes wouldn't stock. Labels stay short
+// so three-per-row buttons never truncate on narrow phones.
 // ---------------------------------------------------------------------------
 export const PANTRY_ITEMS = [
+  // پروتئین
   'مرغ',
-  'گوشت چرخ‌کرده',
+  'گوشت قرمز',
   'ماهی و تن‌ماهی',
+  'سوسیس و کالباس',
   'تخم‌مرغ',
-  'سیب‌زمینی',
-  'گوجه',
-  'پیاز و سیر',
-  'بادمجان',
-  'قارچ',
-  'سبزی تازه',
-  'خیار و کاهو',
+  // لبنیات
+  'شیر',
+  'ماست',
+  'پنیر',
+  'کره',
+  // کابینت — خوراکی‌های خشک
   'برنج',
   'ماکارونی',
   'آرد',
-  'عدس و لوبیا',
-  'ماست و پنیر',
-  'رب و سس گوجه',
   'نان',
+  'عدس',
+  'لوبیا',
+  'نخود',
+  'روغن',
+  'شکر',
+  // سبزیجات
+  'سیب‌زمینی',
+  'پیاز و سیر',
+  'گوجه',
+  'خیار',
+  'کاهو و سبزی',
+  'بادمجان',
+  'کدو و هویج',
+  'فلفل دلمه',
+  'قارچ',
+  // چاشنی و مکمل‌ها
+  'رب گوجه',
+  'کچاپ و سس',
+  'لیمو و آب‌لیمو',
+  'زیتون و ترشی',
+  'عسل و مربا',
+  'مغز و کشمش',
+];
+
+// ---------------------------------------------------------------------------
+// "/" command menu — registered via setMyCommands so users get one-tap quick
+// access from the chat's menu button. registerCommands() (telegram.js) runs on
+// every /start; keep this list in sync with the command switch in router.js.
+// ---------------------------------------------------------------------------
+export const BOT_COMMANDS = [
+  { command: 'start',          description: '🚀 شروع و بازگشت به منوی اصلی' },
+  { command: 'fridge',         description: '🧺 خونه‌م چی دارم؟ پیشنهاد غذا با مواد موجود' },
+  { command: 'rescue',         description: '🚑 نجات مواد در حال فساد' },
+  { command: 'plan',           description: '📅 برنامه غذایی هفتگی' },
+  { command: 'random',         description: '🎰 گردونه شانس' },
+  { command: 'profile',        description: '⚙️ تنظیمات و پروفایل من' },
+  { command: 'help',           description: '📖 راهنمای کامل ربات' },
+  { command: 'cancel',         description: '✖️ لغو عملیات جاری' },
+  { command: 'privacy',        description: '🔒 حریم خصوصی' },
+  { command: 'terms',          description: '📜 قوانین استفاده' },
+  { command: 'support',        description: '💬 پشتیبانی و تماس با سازنده' },
+  { command: 'paysupport',     description: '💳 پشتیبانی پرداخت' },
+  { command: 'delete_my_data', description: '🗑 حذف همه داده‌های من' },
 ];
 
 // Smart situational filters — instant inline toggles.

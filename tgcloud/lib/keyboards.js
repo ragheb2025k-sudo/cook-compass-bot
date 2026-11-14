@@ -61,9 +61,11 @@ export function obSkillKb() {
 function pantryGrid(session) {
   const selected = new Set(session?.pantry?.items ?? []);
   const rows = [];
-  for (let i = 0; i < PANTRY_ITEMS.length; i += 2) {
+  // 3 items per row — labels are kept short (≤14 chars) in config.js so the
+  // expanded grid stays compact and never truncates on narrow phones.
+  for (let i = 0; i < PANTRY_ITEMS.length; i += 3) {
     const row = [];
-    for (let j = i; j < Math.min(i + 2, PANTRY_ITEMS.length); j++) {
+    for (let j = i; j < Math.min(i + 3, PANTRY_ITEMS.length); j++) {
       const item = PANTRY_ITEMS[j];
       const on = selected.has(item);
       row.push(btn(`${on ? '✅' : '⬜'} ${item}`, `pa:${j}`));

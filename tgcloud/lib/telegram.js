@@ -4,6 +4,7 @@
 // on Telegram-side noise.
 
 import { api, BotApiError } from 'sdk';
+import { BOT_COMMANDS } from './config.js';
 import { sleep } from './util.js';
 
 const NO_PREVIEW = { link_preview_options: { is_disabled: true } };
@@ -107,4 +108,17 @@ export async function answerCb(callbackId, text = null, showAlert = false) {
 /** best-effort error notice to the user when a flow blows up. */
 export async function sendError(chatId) {
   await sendMessage(chatId, ERROR_TEXT, RETRY_KB);
+}
+
+/** setMyCommands — registers the "/" quick-access command menu (default scope,
+ *  so it shows for every user regardless of locale). Idempotent and cheap;
+ *  called on /start. Best-effort: a Telegram-side hiccup here must never
+ *  break the flow that triggered it. */
+export async function registerCommands() {
+  try {
+    await api.setMyCommands({ commands: BOT_COMMANDS });
+    console.info('[commands] "/" menu registered');
+  } catch (e) {
+    console.warn('setMyCommands failed:', redact(e?.description ?? e?.message ?? e));
+  }
 }

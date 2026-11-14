@@ -9,7 +9,7 @@
 // Tenant isolation: chatId is always taken from the incoming update itself,
 // never from any client-supplied payload (Gate 2.3.1).
 
-import { sendMessage, editMessageText, answerCb, sendError } from './telegram.js';
+import { sendMessage, editMessageText, answerCb, sendError, registerCommands } from './telegram.js';
 import { menuKb, MENU_ROW, profileKb, historyClearKb, supportKb, deleteDataKb } from './keyboards.js';
 import { openPlanner, startPlan, sendShoppingList, sendDayRecipes, handlePqCallback } from './planner.js';
 import {
@@ -261,6 +261,8 @@ async function showMenu(chatId, messageId) {
 }
 
 async function cmdStart(chatId) {
+  // Keep the "/" quick-access menu registered (idempotent, best-effort).
+  await registerCommands();
   const profile = await getProfile(chatId);
   if (profile) {
     await deleteSession(chatId);
