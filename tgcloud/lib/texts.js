@@ -22,6 +22,15 @@ export function onboardingQuestion(step) {
   if (step === 'diet') {
     return '🍽 <b>محدودیت غذایی خاصی داری؟</b>\n\nروی گزینه درست بزن:';
   }
+  if (step === 'avoid') {
+    return [
+      '🚫 <b>حساسیت غذایی یا چیزی که نمی‌خوری داری؟</b>',
+      '',
+      'مثلاً تخم‌مرغ، لبنیات، بادمجان، تُندی… — هر چیزی که یا بهش حساسیت داری یا اصلاً استفاده نمی‌کنی را <b>همین‌جا تایپ کن</b> (با ویرگول جدا کن).',
+      '',
+      'از این به بعد هیچ پیشنهادی که این مواد را داشته باشد به تو نمی‌دهم — نه توی پیشنهاد لحظه‌ای، نه توی برنامه هفتگی، نه توی گردونه شانس.',
+    ].join('\n');
+  }
   if (step === 'household') {
     return '👨‍👩‍👧 <b>چند نفر توی خونه‌تون غذا می‌خورن؟</b>\n\nمقادیر مواد لازم رو دقیقاً بر همین اساس حساب می‌کنم:';
   }
@@ -31,14 +40,40 @@ export function onboardingQuestion(step) {
   return '';
 }
 
+export const AVOID_EMPTY_ALERT = [
+  '🤭 چیزی متوجه نشدم!',
+  '',
+  'مواد را با ویرگول بنویس؛ مثلاً: <i>تخم‌مرغ، لبنیات</i>',
+  'یا اگر پرهیزی نداری، دکمه «✖️ هیچ پرهیزی ندارم» را بزن.',
+].join('\n');
+
+export function avoidListUpdated(items) {
+  if (items.length === 0) {
+    return [
+      '✅ <b>پرهیزهای غذایی پاک شد.</b>',
+      '',
+      'دیگر محدودیتی روی مواد ندارم — همه‌چیز روی میز است! 🍽',
+    ].join('\n');
+  }
+  return [
+    '✅ <b>پرهیزهای غذایی به‌روزرسانی شد:</b>',
+    '',
+    `🚫 ${items.map((i) => `<b>${esc(i)}</b>`).join('، ')}`,
+    '',
+    'از این به بعد هیچ دستوری که این مواد را داشته باشد پیشنهاد نمی‌دهم.',
+  ].join('\n');
+}
+
 export function profileSaved(profile, historyCount) {
   const dietLabel = { none: 'همه‌چیز', vegetarian: 'گیاهخوار', no_red_meat: 'بدون گوشت قرمز', no_dairy: 'بدون لبنیات' }[profile.diet] ?? 'همه‌چیز';
   const skillLabel = profile.skill === 'medium' ? 'متوسط' : 'ساده';
   const hh = profile.household >= 7 ? '۶ یا بیشتر' : fa(profile.household);
+  const avoid = Array.isArray(profile.avoidFoods) ? profile.avoidFoods.filter(Boolean) : [];
   const lines = [
     '✅ <b>تمام! پروفایل آشپزیت ذخیره شد.</b>',
     '',
     `🥦 محدودیت غذایی: ${esc(dietLabel)}`,
+    `🚫 پرهیزها و حساسیت‌ها: ${avoid.length ? esc(avoid.join('، ')) : 'ندارم'}`,
     `👥 تعداد نفرات: ${esc(hh)} نفر`,
     `🥄 سطح آشپزی: ${esc(skillLabel)}`,
   ];
@@ -92,7 +127,9 @@ export const HELP_TEXT = [
   '',
   '⚡ <b>فیلترهای هوشمند</b> — زیر ۲۰ دقیقه، کم‌ظرف، اقتصادیِ آخر ماه، و تنوع‌طلبیِ بین‌المللی؛ توی صفحه یخچال با یه لمس فعّالشون کن.',
   '',
-  '⚙️ <b>تنظیمات</b> — محدودیت غذایی، تعداد نفرات و سطح آشپزیت رو هر وقت خواستی عوض کن.',
+  '🚫 <b>پرهیزها و حساسیت‌ها</b> — اگر به ماده‌ای حساسیت داری یا چیزی نمی‌خوری، توی تنظیمات ثبتش کن؛ هیچ پیشنهادی، برنامه هفتگی یا گردونه‌ای شامل آن مواد نمی‌شود.',
+  '',
+  '⚙️ <b>تنظیمات</b> — محدودیت غذایی، پرهیزها و حساسیت‌ها، تعداد نفرات و سطح آشپزیت رو هر وقت خواستی عوض کن.',
   '',
   '🧠 سابقه پختت نگه داشته می‌شه — غذایی که تو ۱۴ روز اخیر پختی دیگه پیشنهاد نمی‌دم.',
   '',
@@ -261,10 +298,12 @@ export function profileView(profile, recentCount, latestDish) {
   const dietLabel = { none: 'همه‌چیز می‌خورم', vegetarian: 'گیاهخوار', no_red_meat: 'بدون گوشت قرمز', no_dairy: 'بدون لبنیات' }[profile.diet] ?? 'همه‌چیز';
   const skillLabel = profile.skill === 'medium' ? 'متوسط 🍲' : 'ساده 🥄';
   const hh = profile.household >= 7 ? '۶ یا بیشتر' : fa(profile.household);
+  const avoid = Array.isArray(profile.avoidFoods) ? profile.avoidFoods.filter(Boolean) : [];
   return [
     '⚙️ <b>پروفایل آشپزی تو</b>',
     '',
     `🥦 محدودیت غذایی: ${esc(dietLabel)}`,
+    `🚫 پرهیزها و حساسیت‌ها: ${avoid.length ? esc(avoid.join('، ')) : 'ندارم'}`,
     `👥 تعداد نفرات: ${esc(hh)} نفر`,
     `🥄 سطح آشپزی: ${esc(skillLabel)}`,
     `📚 پخته‌های ${fa(14)} روز اخیر: ${fa(recentCount)} غذا${latestDish ? ` (آخرین: ${esc(latestDish)})` : ''}`,

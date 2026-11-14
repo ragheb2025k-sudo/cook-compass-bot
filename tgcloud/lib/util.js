@@ -33,6 +33,15 @@ export async function sleep(ms) {
   }
 }
 
+/** Split a free-text ingredient list (فارسی و لاتین جداکننده‌ها). */
+export function parseIngredientList(text) {
+  return String(text ?? '')
+    .split(/[،,؛;\n]+|\s+و\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2 && s.length <= 60)
+    .slice(0, 12);
+}
+
 /** "~۳۵ دقیقه" */
 export function timeLabel(minutes) {
   return `~${fa(minutes)} دقیقه`;

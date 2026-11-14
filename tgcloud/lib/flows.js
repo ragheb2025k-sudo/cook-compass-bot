@@ -27,6 +27,11 @@ export function dietPromptOf(key) {
   return DIET_OPTIONS.find((o) => o.key === key)?.prompt ?? 'بدون محدودیت';
 }
 
+/** Free-text restrictions from the profile (حساسیت/عدم مصرف) — always an array. */
+export function avoidFoodsOf(profile) {
+  return Array.isArray(profile?.avoidFoods) ? profile.avoidFoods.map(String).filter(Boolean) : [];
+}
+
 export function skillPromptOf(key) {
   return SKILL_OPTIONS.find((o) => o.key === key)?.prompt ?? 'ساده';
 }
@@ -35,14 +40,8 @@ export function filterPromptOf(key) {
   return FILTERS.find((f) => f.key === key)?.prompt ?? '';
 }
 
-/** Split a free-text ingredient list (فارسی و لاتین جداکننده‌ها). */
-export function parseIngredientList(text) {
-  return String(text ?? '')
-    .split(/[،,؛;\n]+|\s+و\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length >= 2 && s.length <= 60)
-    .slice(0, 12);
-}
+/** Split a free-text ingredient list — canonical impl lives in util.js. */
+export { parseIngredientList } from './util.js';
 
 /** Ensure a profile exists — otherwise route the chat into onboarding. */
 export async function ensureProfile(chatId, messageId = null) {
@@ -56,16 +55,27 @@ export async function ensureProfile(chatId, messageId = null) {
 export async function buildAiContext(tgId, profile, session, { rescueItems = null, avoid = [] } = {}) {
   const exclude = await getRecentDishes(tgId);
   const pantry = session?.pantry ?? {};
-  return {
+  const ctx = {
     household: profile.household,
     dietPrompt: dietPromptOf(profile.diet),
     skillPrompt: skillPromptOf(profile.skill),
+    avoidFoods: avoidFoodsOf(profile),
     items: pantry.items ?? [],
     filters: (pantry.filters ?? []).map(filterPromptOf).filter(Boolean),
     rescue: rescueItems ?? [],
     exclude,
     avoid,
   };
+  // Debug trail for suggestion quality — visible in `npx tgcloud run` output.
+  console.info('[ai ctx]', JSON.stringify({
+    diet: ctx.dietPrompt,
+    avoidFoods: ctx.avoidFoods,
+    items: ctx.items,
+    rescue: ctx.rescue,
+    filters: ctx.filters.length,
+    excluded: ctx.exclude.length,
+  }));
+  return ctx;
 }
 
 /* ------------------------------------------------------------------ */
@@ -84,6 +94,7 @@ export async function presentSuggestions(chatId, messageId, session, { source = 
     const ctx = await buildAiContext(chatId, profile, session, { rescueItems, avoid: session.avoid ?? [] });
     const recipes = await generateRecipes(ctx, RECIPES_PER_ROUND);
     const names = recipes.map((r) => r.name);
+    console.info('[ai recipes]', names.join('، '));
     const nextSession = {
       flow: 'decide',
       source,

@@ -1,13 +1,13 @@
 // tgcloud/lib/keyboards.js — inline keyboard builders.
 // Callback data vocabulary (all ≤ 64 bytes):
 //   menu | menu:fridge | menu:rescue | menu:plan | menu:random | menu:profile
-//   ob:diet:<key> | ob:hh:<n> | ob:skill:<key>
+//   ob:diet:<key> | ob:avoid:none | ob:hh:<n> | ob:skill:<key>
 //   pa:<index> (pantry toggle) | pa:go | pa:clear | pa:text
 //   fl:<key> (filter toggle)
 //   dec:next | dec:pick | dec:again
 //   rnd | rnd:again | rnd:add
 //   pl:simple | pl:batch | pl:shop | pl:cook | pl:again
-//   pr | pr:edit:diet | pr:edit:household | pr:edit:skill | pr:clearhist | pr:clearhist:yes
+//   pr | pr:edit:diet | pr:edit:avoid | pr:edit:household | pr:edit:skill | pr:clearhist | pr:clearhist:yes
 //   retry
 
 import { PANTRY_ITEMS, FILTERS, DIET_OPTIONS, SKILL_OPTIONS, WEEKDAYS_FA } from './config.js';
@@ -31,6 +31,14 @@ export function obDietKb() {
   const rows = DIET_OPTIONS.map((o) => [btn(o.label, `ob:diet:${o.key}`)]);
   rows.push([btn('🏠 منوی اصلی', 'menu')]);
   return kb(rows);
+}
+
+/** پرهیزها/حساسیت — free text is typed in chat; this button skips the step. */
+export function obAvoidKb() {
+  return kb([
+    [btn('✖️ هیچ پرهیزی ندارم', 'ob:avoid:none')],
+    [btn('🏠 منوی اصلی', 'menu')],
+  ]);
 }
 
 export function obHouseholdKb() {
@@ -141,6 +149,7 @@ export function planKb(plan) {
 export function profileKb() {
   return kb([
     [btn('🥦 محدودیت غذایی', 'pr:edit:diet')],
+    [btn('🚫 پرهیزها و حساسیت‌ها', 'pr:edit:avoid')],
     [btn('👥 تعداد نفرات', 'pr:edit:household')],
     [btn('🥄 سطح آشپزی', 'pr:edit:skill')],
     [btn('🧹 پاک‌سازی سابقه پخت', 'pr:clearhist')],

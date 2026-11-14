@@ -81,8 +81,84 @@ function planFor() {
   return days;
 }
 
-function recipeFor(name) {
-  const base = MOCK_RECIPES[0];
+/* ------------------------------------------------------------------ */
+/* پرهیزهای غذایی (حساسیت/عدم مصرف) — the mock honors the profile too   */
+/* ------------------------------------------------------------------ */
+
+/** Parse the avoid-list line the real prompts inject via baseContextLines. */
+function avoidFoodsFromPrompt(u) {
+  const m = u.match(/پرهیزهای غذایی کاربر[^\n]*:\s*([^\n]+)/);
+  if (!m) return [];
+  return m[1]
+    .split(/[،,؛;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+/** True when any avoided food appears in the recipe (name/ingredients/steps). */
+function recipeHitsAvoid(recipe, avoid) {
+  if (avoid.length === 0) return false;
+  const haystack = [
+    recipe.name ?? '',
+    ...(recipe.ingredients ?? []).map((i) => i?.name ?? ''),
+    ...(recipe.steps ?? []),
+  ].join(' ');
+  return avoid.some((a) => haystack.includes(a));
+}
+
+const SAFE_BASE_ITEMS = ['برنج', 'پیاز', 'گوجه', 'رب گوجه', 'روغن', 'نمک، زردچوبه و فلفل'];
+
+/** Last-resort recipe built from base pantry items minus the avoided ones. */
+function safeFallbackRecipe(avoid) {
+  const items = SAFE_BASE_ITEMS.filter((name) => !avoid.some((a) => name.includes(a)));
+  if (items.length < 2) return null;
+  return RECIPE(
+    'خوراک ساده برنج و گوجه',
+    30,
+    'آسان',
+    'گزینه بی‌ریسک متناسب با پرهیزهای غذایی‌ات',
+    items.map((name) => ({ name, qty: 'به میزان لازم' })),
+    ['پیاز و گوجه را تفت بده.', 'برنج نیم‌پز را اضافه کن و با شعله ملایم دم بگذار.'],
+    'مقادیر را با ذائقه خودت تنظیم کن — این نسخه از پرهیزهای ثبت‌شده‌ات پیروی می‌کند.',
+  );
+}
+
+function safeRecipes(avoid) {
+  const kept = MOCK_RECIPES.filter((r) => !recipeHitsAvoid(r, avoid));
+  if (kept.length > 0) return kept;
+  const fallback = safeFallbackRecipe(avoid);
+  return fallback ? [fallback] : MOCK_RECIPES;
+}
+
+function safeRecipeBase(avoid) {
+  const kept = MOCK_RECIPES.filter((r) => !recipeHitsAvoid(r, avoid));
+  return kept[0] ?? safeFallbackRecipe(avoid) ?? MOCK_RECIPES[0];
+}
+
+const PLAN_SAFE_NAMES = ['خوراک برنج و سبزی ساده', 'خوراک سیب‌زمینی و گوجه', 'عدس‌پلو ساده'];
+
+function safePlan(avoid) {
+  const plan = planFor();
+  let s = 0;
+  for (const day of plan) {
+    if (avoid.some((a) => day.lunch.includes(a))) day.lunch = PLAN_SAFE_NAMES[s++ % PLAN_SAFE_NAMES.length];
+    if (avoid.some((a) => day.dinner.includes(a))) day.dinner = PLAN_SAFE_NAMES[s++ % PLAN_SAFE_NAMES.length];
+  }
+  const shoppingList = MOCK_PLAN.shopping_list
+    .map((cat) => ({
+      category: cat.category,
+      items: cat.items.filter((i) => !avoid.some((a) => i.name.includes(a))),
+    }))
+    .filter((cat) => cat.items.length > 0);
+  if (shoppingList.length === 0) {
+    shoppingList.push({ category: 'سایر', items: [{ name: 'آب', qty: 'به میزان لازم' }] });
+  }
+  return { days: plan, shopping_list: shoppingList };
+}
+
+function recipeFor(name, avoid) {
+  const base = safeRecipeBase(avoid);
   return {
     ...base,
     name,
@@ -93,15 +169,18 @@ function recipeFor(name) {
 
 /**
  * Route a mocked reply by markers in the prompt — same shapes the real
- * provider must return for each domain function in lib/ai.js.
+ * provider must return for each domain function in lib/ai.js. The profile's
+ * پرهیزهای غذایی (parsed from the prompt) are honored deterministically.
  */
 export function mockChatReply(user) {
   const u = String(user ?? '');
+  const avoid = avoidFoodsFromPrompt(u);
 
   if (u.includes('برنامه غذایی هفتگی')) {
+    const plan = safePlan(avoid);
     return JSON.stringify({
-      days: planFor(),
-      shopping_list: MOCK_PLAN.shopping_list,
+      days: plan.days,
+      shopping_list: plan.shopping_list,
       batch_notes: u.includes('حالت ساده') ? [] : MOCK_PLAN.batch_notes,
     });
   }
@@ -111,18 +190,19 @@ export function mockChatReply(user) {
     const n = Number(dayMatch[1]);
     return JSON.stringify({
       recipes: [
-        { slot: 'lunch', ...recipeFor(MOCK_PLAN.lunches[n - 1] ?? 'خوراک ناهار') },
-        { slot: 'dinner', ...recipeFor(MOCK_PLAN.dinners[n - 1] ?? 'خوراک شام') },
+        { slot: 'lunch', ...recipeFor(MOCK_PLAN.lunches[n - 1] ?? 'خوراک ناهار', avoid) },
+        { slot: 'dinner', ...recipeFor(MOCK_PLAN.dinners[n - 1] ?? 'خوراک شام', avoid) },
       ],
     });
   }
 
   if (u.includes('گردونه شانس')) {
+    const recipes = safeRecipes(avoid);
     return JSON.stringify({
-      recipe: MOCK_RECIPES[1],
+      recipe: recipes[Math.floor(Math.random() * recipes.length)],
       fun_line: 'گردونه گفت امروز روزِ یک‌تابه‌ای‌هاست! 🍳',
     });
   }
 
-  return JSON.stringify({ recipes: MOCK_RECIPES });
+  return JSON.stringify({ recipes: safeRecipes(avoid).slice(0, 3) });
 }

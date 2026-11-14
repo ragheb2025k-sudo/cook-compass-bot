@@ -147,6 +147,7 @@ const CHEF_SYSTEM = [
   '- فقط و فقط یک شیء JSON معتبر برگردان؛ بدون هیچ متن اضافه، بدون markdown و بدون بک‌تیک.',
   '- نام غذاها و همه متن‌ها فارسیِ روان است.',
   '- هرگز از غذاهای فهرست «ممنوعه» استفاده نمی‌کنی.',
+  '- اگر کاربر پرهیز غذایی (حساسیت یا عدم مصرف) ثبت کرده است، حتی مقدار جزئی از آن ماده یا مشتقات آن هم در مواد لازمِ هیچ دستوری نمی‌آید — حساسیت جدی است.',
   '- مقادیر مواد لازم را دقیقاً برای تعداد نفراتِ ذکرشده حساب می‌کنی.',
 ].join('\n');
 
@@ -154,6 +155,9 @@ function baseContextLines(ctx) {
   const lines = [];
   lines.push(`- تعداد نفرات: ${ctx.household} نفر (مقادیر مواد دقیقاً برای همین تعداد)`);
   lines.push(`- محدودیت غذایی: ${ctx.dietPrompt}`);
+  if (ctx.avoidFoods?.length) {
+    lines.push(`- 🚫 پرهیزهای غذایی کاربر (حساسیت/عدم مصرف) — مطلقاً هیچ ماده‌ای از این‌ها و هیچ غذایی حاوی آن‌ها در هیچ دستوری نباشد: ${ctx.avoidFoods.join('، ')}`);
+  }
   lines.push(`- سطح آشپزی: ${ctx.skillPrompt}`);
   if (ctx.items?.length) lines.push(`- مواد موجود در آشپزخانه (اولویت با همین‌ها): ${ctx.items.join('، ')}`);
   if (ctx.rescue?.length) {
@@ -233,6 +237,7 @@ function buildCtx(ctx) {
     household: ctx.household ?? 2,
     dietPrompt: ctx.dietPrompt ?? 'بدون محدودیت',
     skillPrompt: ctx.skillPrompt ?? 'ساده',
+    avoidFoods: (ctx.avoidFoods ?? []).map(String),
     items: (ctx.items ?? []).map(String),
     rescue: (ctx.rescue ?? []).map(String),
     filters: (ctx.filters ?? []).map(String),

@@ -19,7 +19,7 @@ import {
   RESCUE_EMPTY_ALERT,
 } from './texts.js';
 import { getSession, setSession, deleteSession, getProfile, clearHistory, getRecentDishes, countRecentHistory } from './store.js';
-import { startOnboarding, editField, handleObCallback } from './onboarding.js';
+import { startOnboarding, editField, handleObCallback, handleOnboardingText } from './onboarding.js';
 import { openFridge, togglePantry, toggleFilter, clearPantry, startSuggest, handlePantryText } from './pantry.js';
 import { decideNext, decidePick, decideAgain, runRescue, startRandom, randomAdd, parseIngredientList, ensureProfile } from './flows.js';
 
@@ -67,6 +67,9 @@ export async function handleMessage(message) {
     }
     if (session.flow === 'pantry') {
       return await handlePantryText(chatId, text);
+    }
+    if (session.flow === 'onboarding') {
+      return await handleOnboardingText(chatId, session, text);
     }
     return await sendMessage(chatId, UNKNOWN_HINT, MENU_ROW);
   } catch (e) {

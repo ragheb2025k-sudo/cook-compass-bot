@@ -10,12 +10,13 @@ import { table, integer, text, json, index, sql } from 'sdk/db';
 // User profile — filled during onboarding, editable from ⚙️ settings.
 // ---------------------------------------------------------------------------
 export const profiles = table('profiles', {
-  tgId:      integer('tg_id').primaryKey(),
-  diet:      text('diet').notNull().default('none'),    // none | vegetarian | no_red_meat | no_dairy
-  household: integer('household').notNull().default(2), // 1..7 (7 means "6 or more")
-  skill:     text('skill').notNull().default('simple'), // simple | medium
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+  tgId:       integer('tg_id').primaryKey(),
+  diet:       text('diet').notNull().default('none'),    // none | vegetarian | no_red_meat | no_dairy
+  household:  integer('household').notNull().default(2), // 1..7 (7 means "6 or more")
+  skill:      text('skill').notNull().default('simple'), // simple | medium
+  avoidFoods: json('avoid_foods'),                       // ["تخم‌مرغ", "لبنیات", …] — حساسیت/عدم مصرف؛ null برای پروفایل‌های قدیمی
+  createdAt:  integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+  updatedAt:  integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
 });
 
 // ---------------------------------------------------------------------------

@@ -38,6 +38,7 @@ export async function startPlan(chatId, messageId, mode, cqId = null) {
   try {
     const ctx = await buildAiContext(chatId, profile, null, {});
     const plan = await generatePlan(ctx, mode);
+    console.info('[ai plan]', plan.days.map((d) => `${d.n}☀️${d.lunch}/🌙${d.dinner}`).join(' | '));
     await savePlan(chatId, plan);
     const intro = `${planIntro(mode, profile.household)}\n\n${planOverview(plan, profile.household)}`;
     await editMessageText(chatId, messageId, intro, planKb(plan));
