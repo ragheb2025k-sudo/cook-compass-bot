@@ -368,12 +368,15 @@ export async function generatePlan(ctx, mode) {
 
 /** Categorized weekly shopping list, generated from a saved plan. Runs in its
  *  OWN invocation (triggered by the 🛒 لیست خرید button) so the phase-1 plan
- *  call and this call each stay far inside the ~30s serverless budget. */
+ *  call and this call each stay far inside the ~30s serverless budget.
+ *  Deliberately COMPACT prompt: only household/items/avoid matter here — the
+ *  14-day exclusion list and skill/filters context would bloat generation
+ *  time for zero quality gain. */
 export async function generateShoppingList(ctx, plan) {
-  const c = buildCtx(ctx);
   const lines = ['برای این برنامه غذایی هفتگی، لیست خرید کامل و دقیق به فارسی بنویس:'];
-  lines.push(...baseContextLines(c));
-  lines.push('- مقادیر را برای تعداد نفرات ذکرشده و کل ۷ روز (۷ ناهار + ۷ شام) حساب کن.');
+  lines.push(`- تعداد نفرات: ${ctx.household ?? 2} نفر (مقادیر برای همین تعداد و کل ۷ روز: ۷ ناهار + ۷ شام)`);
+  if (ctx.avoidFoods?.length) lines.push(`- 🚫 مطلقاً این‌ها را نیاور: ${ctx.avoidFoods.join('، ')}`);
+  if (ctx.items?.length) lines.push(`- این‌ها خونه هست (خریدشان لازم نیست): ${ctx.items.join('، ')}`);
   lines.push('- دسته‌ها فقط این‌ها باشند: پروتئین، سبزیجات و میوه، حبوبات و غلات، لبنیات، سایر.');
   lines.push('- فشرده و عمل‌گرا؛ چیزی که در منو نیست نیاور.');
   lines.push('');
@@ -387,7 +390,7 @@ export async function generateShoppingList(ctx, plan) {
     shopping_list: [{ category: 'پروتئین', items: [{ name: 'مرغ', qty: '۱ کیلوگرم' }] }],
   }));
   const data = await chatJson(CHEF_SYSTEM, lines.join('\n'), {
-    maxTokens: 1200,
+    maxTokens: 800,
     temperature: 0.5,
   });
   const shoppingList = asArray(data.shopping_list)
