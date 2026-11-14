@@ -51,14 +51,21 @@ async function callChat({ system, user, maxTokens, temperature = AI.temperature,
   };
   if (AI.apiKey) headers.Authorization = `Bearer ${AI.apiKey}`;
 
-  // The whole exchange (request + status + body + extraction) runs inside one
-  // Promise.race with a hard setTimeout stop. The runtime's fetch has been
-  // OBSERVED to ignore AbortSignal — without the race, a slow provider hangs
-  // past the cap until the platform kills the whole invocation (~30s) and the
-  // user sees nothing. The race returns control at timeoutMs no matter what,
-  // so the caller's error/retry card always lands. AbortSignal stays as belt:
-  // it frees the socket early on runtimes that DO honor it.
-  const work = (async () => {
+  // ⏱️ TIMEOUT STRATEGY FOR THIS RUNTIME (learned the hard way):
+  // - The isolate exposes NEITHER setTimeout/clearTimeout NOR a working
+  //   AbortSignal.timeout (lib/util.js's sleep() already documents this).
+  // - The platform hard-kills the invocation at ~30s.
+  // So per-call wall-clock bounding via timers is IMPOSSIBLE here. Instead:
+  //  1. Requests are small (token caps in config.js) — the provider itself
+  //     bounds the response time; pollinations also caches identical prompts
+  //     (retries land in ~1s).
+  //  2. chatJson/generatePlan retry ADAPTIVELY using Date.now() math only —
+  //     a fast-failing attempt (HTTP 402/5xx) leaves budget for a 2nd try;
+  //     a hanging one dies with the invocation (unavoidable).
+  //  3. Every loading message carries a «تلاش دوباره» button, so even a
+  //     platform kill is one tap away from recovery for the user.
+  // AbortSignal stays as belt: on runtimes that honor it, the socket frees up.
+  return await (async () => {
     const res = await fetch(`${AI.baseUrl}${AI.chatPath ?? '/chat/completions'}`, {
       method: 'POST',
       headers,
@@ -74,23 +81,6 @@ async function callChat({ system, user, maxTokens, temperature = AI.temperature,
     if (!content || !String(content).trim()) throw new AiError('AI empty response');
     return String(content);
   })();
-
-  let killTimer = null;
-  try {
-    return await Promise.race([
-      work,
-      new Promise((_, reject) => {
-        killTimer = setTimeout(() => reject(new AiError(`AI timeout after ${timeoutMs}ms`)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    // This runtime exposes setTimeout but NOT clearTimeout (observed:
-    // "clearTimeout is not defined"). Leaving the timer un-cleared is safe —
-    // firing late rejects an already-settled race, a no-op; the isolate is
-    // torn down with the invocation anyway.
-    try { if (typeof clearTimeout === 'function') clearTimeout(killTimer); } catch { /* ignore */ }
-    work.catch(() => {}); // orphaned request must never become an unhandled rejection
-  }
 }
 
 /** Pull the first JSON object out of arbitrary model prose. */

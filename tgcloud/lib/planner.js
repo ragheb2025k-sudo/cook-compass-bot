@@ -131,7 +131,10 @@ export async function startPlan(chatId, messageId, mode, cqId = null) {
     await editMessageText(chatId, messageId, AI_QUOTA_ALERT, MENU_ROW);
     return;
   }
-  await editMessageText(chatId, messageId, PLAN_LOADING, null);
+  await editMessageText(chatId, messageId, PLAN_LOADING, [
+    [{ text: '🔄 تلاش دوباره', callback_data: `retry:plan:${mode}` }],
+    [{ text: '🏠 منوی اصلی', callback_data: 'menu' }],
+  ]);
   try {
     const ctx = await buildAiContext(chatId, profile, session, {});
     const plan = await generatePlan(ctx, mode);
@@ -179,7 +182,10 @@ export async function sendDayRecipes(chatId, dayN, cqId = null) {
     await sendMessage(chatId, AI_QUOTA_ALERT, MENU_ROW);
     return;
   }
-  const sent = await sendMessage(chatId, dayLoading(n), null);
+  const sent = await sendMessage(chatId, dayLoading(n), [
+    [{ text: '🔄 تلاش دوباره', callback_data: `retry:day:${n}` }],
+    [{ text: '🏠 منوی اصلی', callback_data: 'menu' }],
+  ]);
   try {
     const profile = await getProfile(chatId);
     const session = (await getSession(chatId)) ?? {};
