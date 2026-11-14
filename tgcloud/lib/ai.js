@@ -84,7 +84,11 @@ async function callChat({ system, user, maxTokens, temperature = AI.temperature,
       }),
     ]);
   } finally {
-    clearTimeout(killTimer);
+    // This runtime exposes setTimeout but NOT clearTimeout (observed:
+    // "clearTimeout is not defined"). Leaving the timer un-cleared is safe —
+    // firing late rejects an already-settled race, a no-op; the isolate is
+    // torn down with the invocation anyway.
+    try { if (typeof clearTimeout === 'function') clearTimeout(killTimer); } catch { /* ignore */ }
     work.catch(() => {}); // orphaned request must never become an unhandled rejection
   }
 }
