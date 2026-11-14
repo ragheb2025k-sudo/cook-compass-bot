@@ -256,7 +256,7 @@ export function randomResultHeader(funLine) {
 export const PLAN_Q_INTRO = [
   '📅 <b>برنامه غذایی هفتگی</b>',
   '',
-  'قبل از چیدن برنامه، چند سؤال کوتاه ازت می‌پرسم تا برنامه دقیقاً طبق سلیقه، بودجه و انرژی این هفته‌ات چیده بشه 👇',
+  'قبل از چیدن برنامه، <b>۴ سؤال کوتاه</b> ازت می‌پرسم — سهمیه گوشت قرمز، ماهی، مرغ و تعداد شام سبک این هفته — تا برنامه دقیقاً طبق سلیقه، بودجه و انرژی این هفته‌ات چیده بشه 👇',
   '',
   `<i>${esc(WEEKLY_PLAN.ECONOMY_HINT)}</i>`,
 ].join('\n');
@@ -266,6 +266,7 @@ export function planQQuestion(field, idx, total) {
   return [
     `${q.emoji} <b>${esc(q.question)}</b>`,
     '',
+    '<i>فقط عدد را بزن — ۰ یعنی اصلاً نه.</i>',
     `<i>سؤال ${fa(idx)} از ${fa(total)}</i>`,
   ].join('\n');
 }

@@ -132,12 +132,11 @@ export function planModeKb() {
   ]);
 }
 
-/** Weekly-plan questionnaire — ۰..۴ quota buttons for one question. */
+/** Weekly-plan questionnaire — bare ۰..۴ number buttons, numbers ONLY:
+ *  longer labels (emoji + count + unit) get truncated on narrow Telegram
+ *  keyboards; the question text above carries the meaning. */
 export function planQKb(field) {
-  const q = WEEKLY_PLAN.QUESTIONS[field];
-  const unit = field === 'light' ? 'شام سبک' : 'وعده';
-  const rows = [];
-  rows.push(WEEKLY_PLAN.COUNT_OPTIONS.map((n) => btn(`${q.emoji} ${faNum(n)} ${unit}`, `pq:${field}:${n}`)));
+  const rows = [WEEKLY_PLAN.COUNT_OPTIONS.map((n) => btn(faNum(n), `pq:${field}:${n}`))];
   rows.push([btn('🏠 منوی اصلی', 'menu')]);
   return kb(rows);
 }

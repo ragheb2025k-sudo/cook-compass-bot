@@ -35,15 +35,17 @@ import { esc } from './util.js';
 /* Questionnaire plumbing                                              */
 /* ------------------------------------------------------------------ */
 
-/** Fresh questionnaire draft — diet-forbidden proteins start at 0 and are
- *  never asked; the remaining questions form `order`. */
+/** Fresh questionnaire draft — ALL four questions start unanswered (null) so
+ *  nextQuestion asks meat/fish/chicken AND light. Diet-forbidden proteins are
+ *  pre-answered 0 and never asked; the remaining questions form `order`. */
 function freshPlanq(profile) {
   const veg = profile?.diet === 'vegetarian';
   const noRed = profile?.diet === 'no_red_meat';
   const skipped = [];
   if (veg) skipped.push('meat', 'fish', 'chicken');
   else if (noRed) skipped.push('meat');
-  const planq = { meat: 0, fish: 0, chicken: 0, light: null, mode: null, done: false, order: [] };
+  // ⚠️ Unanswered must be null (not 0) — 0 is a legit answer, null means "asked next".
+  const planq = { meat: null, fish: null, chicken: null, light: null, mode: null, done: false, order: [] };
   for (const f of WEEKLY_PLAN.ORDER) {
     if (skipped.includes(f)) planq[f] = 0;
     else planq.order.push(f);
@@ -98,7 +100,7 @@ export async function handlePqCallback(chatId, messageId, data, cqId) {
   if (next) {
     await setSession(chatId, { ...session, flow: 'planq', planq });
     await editMessageText(chatId, messageId, planQQuestion(next.field, next.idx, next.total), planQKb(next.field));
-    await answerCb(cqId);
+    await answerCb(cqId, 'ثبت شد ✅');
     return;
   }
   planq.done = true;

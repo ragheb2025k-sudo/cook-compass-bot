@@ -78,7 +78,7 @@ export const WEEKLY_PLAN = {
     meat:    { key: 'meat',    emoji: '🥩', question: 'تو این هفته چند وعده گوشت قرمز داریم؟' },
     fish:    { key: 'fish',    emoji: '🐟', question: 'تو این هفته چند وعده ماهی داریم؟' },
     chicken: { key: 'chicken', emoji: '🍗', question: 'تو این هفته چند وعده مرغ داریم؟' },
-    light:   { key: 'light',   emoji: '🥗', question: 'چند شام سبک توی هفته دوست داری؟ (سوپ، سالاد، املت، نان‌وپنیر و…)' },
+    light:   { key: 'light',   emoji: '🥗', question: 'این هفته چند شام سبک بخوریم؟ (سوپ، سالاد، املت و…)' },
   },
   ORDER: ['meat', 'fish', 'chicken', 'light'],
 };

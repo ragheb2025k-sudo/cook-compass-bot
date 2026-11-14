@@ -295,7 +295,7 @@ export async function generatePlan(ctx, mode) {
       maxTokens: AI.maxTokensPlan,
       temperature: 0.75,
     });
-    lastIssues = validatePlanDays(data);
+    lastIssues = validatePlanDays(data, c.weeklyTargets);
     if (lastIssues.length === 0) break;
     console.warn('plan rule violations:', lastIssues.join(' | '));
   }
@@ -334,23 +334,51 @@ export async function generatePlan(ctx, mode) {
 }
 
 const RICE_DISH_RE = /پلو|چلو|کته|ته\u200cچین|ته چین|برنج|بریانی/;
+const FISH_DISH_RE = /ماهی|میگو|قزل|سالمون/;
+const CHICKEN_DISH_RE = /مرغ|جوجه/;
+const MEAT_DISH_RE = /گوشت|قیمه|قورمه|کوفته|کباب|استک|فیلی|شامی|بره|گوسفند|گوساله/;
 
-/** Deterministic check of the user's non-negotiable plan rules. */
-function validatePlanDays(data) {
+/** Rough protein class of a dish name — fish/chicken take precedence over
+ *  red-meat keywords so «کباب تابه‌ای مرغ» counts as chicken, not meat. */
+function dishProtein(name) {
+  if (FISH_DISH_RE.test(name)) return 'fish';
+  if (CHICKEN_DISH_RE.test(name)) return 'chicken';
+  if (MEAT_DISH_RE.test(name)) return 'meat';
+  return null;
+}
+
+const PROTEIN_LABELS = { meat: 'گوشت قرمز', fish: 'ماهی', chicken: 'مرغ' };
+
+/** Deterministic check of the user's non-negotiable plan rules: one rice meal
+ *  per day, no repeated dish, an alternative for EVERY meal, protein quotas
+ *  (0 = absolutely none) and the exact light-dinner count. */
+function validatePlanDays(data, targets = null) {
   const issues = [];
   const days = asArray(data.days);
   const names = [];
+  const counts = { meat: 0, fish: 0, chicken: 0 };
+  let lightCount = 0;
   for (const d of days) {
     const lunch = String(d?.lunch ?? '').trim();
     const dinner = String(d?.dinner ?? '').trim();
+    const lunchAlt = String(d?.lunch_alt ?? d?.lunchAlt ?? '').trim();
+    const dinnerAlt = String(d?.dinner_alt ?? d?.dinnerAlt ?? '').trim();
     if (lunch && dinner) {
       // Rule: never two rice-based meals in the same day.
       if (RICE_DISH_RE.test(lunch) && RICE_DISH_RE.test(dinner)) {
         issues.push(`روز ${d?.n}: ناهار («${lunch}») و شام («${dinner}») هر دو برنجی‌اند — شام آن روز باید غیربرنجی شود`);
       }
     }
-    if (lunch) names.push(lunch);
-    if (dinner) names.push(dinner);
+    // Rule: every meal must carry a realistic alternative.
+    if (lunch && !lunchAlt) issues.push(`روز ${d?.n}: جایگزین ناهار نوشته نشده است — برای هر وعده یک جایگزین لازم است`);
+    if (dinner && !dinnerAlt) issues.push(`روز ${d?.n}: جایگزین شام نوشته نشده است — برای هر وعده یک جایگزین لازم است`);
+    if (d?.dinner_light === true || d?.dinnerLight === true) lightCount++;
+    for (const meal of [lunch, dinner]) {
+      if (!meal) continue;
+      names.push(meal);
+      const p = dishProtein(meal);
+      if (p) counts[p]++;
+    }
   }
   // Rule: no dish repeated within the week (variety).
   const seen = new Set();
@@ -360,6 +388,23 @@ function validatePlanDays(data) {
     seen.add(name);
   }
   if (dupes.length) issues.push(`این غذاها تکرار شده‌اند: ${dupes.join('، ')}`);
+  // Rule: protein quotas (0 = absolutely none) + exact light-dinner count.
+  if (targets) {
+    for (const p of ['meat', 'fish', 'chicken']) {
+      const quota = Number(targets[p] ?? 0);
+      if (counts[p] > quota) {
+        issues.push(
+          quota === 0
+            ? `سهمیه ${PROTEIN_LABELS[p]} صفر بود ولی ${counts[p]} وعده شامل آن است — مطلقاً هیچ وعده‌ای ${PROTEIN_LABELS[p]} نباشد`
+            : `تعداد وعده‌های ${PROTEIN_LABELS[p]} (${counts[p]}) از سهمیه (${quota}) بیشتر شد`,
+        );
+      }
+    }
+    const lightQuota = Number(targets.light ?? 0);
+    if (lightCount !== lightQuota) {
+      issues.push(`تعداد شام‌های سبک (${lightCount}) باید دقیقاً ${lightQuota} باشد`);
+    }
+  }
   return issues;
 }
 
