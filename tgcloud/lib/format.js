@@ -101,5 +101,5 @@ export function pantrySelectionSummary(session) {
   const custom = session?.pantry?.custom ?? [];
   const all = [...items, ...custom];
   if (all.length === 0) return '';
-  return `\n🧊 انتخاب‌ها: ${all.map(esc).join('، ')}`;
+  return `\n🧺 انتخاب‌ها: ${all.map(esc).join('، ')}`;
 }

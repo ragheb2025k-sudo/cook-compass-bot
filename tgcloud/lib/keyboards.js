@@ -22,7 +22,7 @@ export const MENU_ROW = [[btn('🏠 منوی اصلی', 'menu')]];
 
 export function menuKb() {
   return kb([
-    [btn('🧊 یخچالم چی داره؟', 'menu:fridge')],
+    [btn('🧺 خونه‌م چی دارم؟', 'menu:fridge')],
     [btn('🚑 نجات مواد در حال فساد', 'menu:rescue')],
     [btn('📅 برنامه غذایی هفتگی', 'menu:plan')],
     [btn('🎰 گردونه شانس', 'menu:random')],

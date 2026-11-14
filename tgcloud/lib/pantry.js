@@ -1,4 +1,4 @@
-// tgcloud/lib/pantry.js — "What's in My Fridge?" — the low-friction input flow.
+// tgcloud/lib/pantry.js — "What do I have at home?" — the low-friction input flow.
 // Tapping a staple toggles ✅/⬜ in the sessions table and re-renders the grid
 // via editMessageReplyMarkup semantics (we re-render text+markup together so
 // the selection summary stays accurate).
@@ -22,7 +22,7 @@ export function emptyPantry() {
   return { items: [], custom: [], filters: [] };
 }
 
-/** Open (or reopen) the fridge grid. Keeps previous selections when present. */
+/** Open (or reopen) the pantry grid. Keeps previous selections when present. */
 export async function openFridge(chatId, { edit = false, messageId = null } = {}) {
   const current = (await getSession(chatId)) ?? {};
   const pantry = current.pantry && typeof current.pantry === 'object'
@@ -39,7 +39,7 @@ export async function openFridge(chatId, { edit = false, messageId = null } = {}
 export async function togglePantry(chatId, messageId, index, cqId) {
   const session = await getSession(chatId);
   if (!session || session.flow !== 'pantry') {
-    await answerCb(cqId, 'این منو منقضی شده؛ دوباره یخچال رو باز کن', true);
+    await answerCb(cqId, 'این منو منقضی شده؛ دوباره «خونه‌م چی دارم» رو باز کن', true);
     return;
   }
   const item = PANTRY_ITEMS[index];
@@ -60,7 +60,7 @@ export async function togglePantry(chatId, messageId, index, cqId) {
 export async function toggleFilter(chatId, messageId, key, cqId) {
   const session = await getSession(chatId);
   if (!session || session.flow !== 'pantry') {
-    await answerCb(cqId, 'این منو منقضی شده؛ دوباره یخچال رو باز کن', true);
+    await answerCb(cqId, 'این منو منقضی شده؛ دوباره «خونه‌م چی دارم» رو باز کن', true);
     return;
   }
   const filter = FILTERS.find((f) => f.key === key);
@@ -90,7 +90,7 @@ export async function clearPantry(chatId, messageId, cqId) {
 export async function startSuggest(chatId, messageId, cqId) {
   const session = await getSession(chatId);
   if (!session || session.flow !== 'pantry') {
-    await answerCb(cqId, 'این منو منقضی شده؛ دوباره یخچال رو باز کن', true);
+    await answerCb(cqId, 'این منو منقضی شده؛ دوباره «خونه‌م چی دارم» رو باز کن', true);
     return;
   }
   const { items = [], custom = [], filters = [] } = session.pantry ?? {};
@@ -103,7 +103,7 @@ export async function startSuggest(chatId, messageId, cqId) {
   await presentSuggestions(chatId, messageId, session, { source: 'pantry' });
 }
 
-/** Free-text ingredient list while the fridge is open. */
+/** Free-text ingredient list while the pantry grid is open. */
 export async function handlePantryText(chatId, text, messageId = null) {
   const items = parseIngredientList(text);
   if (items.length === 0) {

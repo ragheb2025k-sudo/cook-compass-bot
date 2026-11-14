@@ -71,7 +71,9 @@ export async function handleMessage(message) {
           await deleteSession(chatId);
           return await sendMessage(chatId, CANCELLED, MENU_ROW);
         }
-        case '/fridge': return await openFridge(chatId);
+        case '/fridge':
+        case '/home':
+          return await openFridge(chatId);
         case '/rescue': return await cmdRescue(chatId);
         case '/plan': return await openPlanner(chatId);
         case '/random': return await cmdRandomMessage(chatId);

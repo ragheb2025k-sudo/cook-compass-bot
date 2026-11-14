@@ -92,23 +92,29 @@ export const HISTORY_DAYS = 14;
 export const RECIPES_PER_ROUND = 3;
 
 // ---------------------------------------------------------------------------
-// "What's in My Fridge?" — the low-friction pantry grid (2 items per row).
+// "What do I have at home?" — the low-friction pantry grid (2 items per row).
+// Deliberately home-wide (fridge + cupboard + freezer): rice, pasta and
+// legumes live in the cupboard, not the fridge.
 // ---------------------------------------------------------------------------
 export const PANTRY_ITEMS = [
   'مرغ',
   'گوشت چرخ‌کرده',
+  'ماهی و تن‌ماهی',
   'تخم‌مرغ',
   'سیب‌زمینی',
   'گوجه',
+  'پیاز و سیر',
   'بادمجان',
+  'قارچ',
+  'سبزی تازه',
+  'خیار و کاهو',
   'برنج',
   'ماکارونی',
-  'عدس',
-  'لوبیا',
-  'پیاز',
+  'آرد',
+  'عدس و لوبیا',
   'ماست و پنیر',
-  'سبزی تازه',
-  'قارچ',
+  'رب و سس گوجه',
+  'نان',
 ];
 
 // Smart situational filters — instant inline toggles.
