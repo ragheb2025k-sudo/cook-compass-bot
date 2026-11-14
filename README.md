@@ -1,10 +1,13 @@
 # قطب‌نمای آشپزی 🧭 — @CookCompassBot
 
+[![Deploy Bot to Telegram Serverless](https://github.com/ragheb2025k-sudo/cook-compass-bot/actions/workflows/deploy-bot.yml/badge.svg)](https://github.com/ragheb2025k-sudo/cook-compass-bot/actions/workflows/deploy-bot.yml)
+[![Deploy Landing to GitHub Pages](https://github.com/ragheb2025k-sudo/cook-compass-bot/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/ragheb2025k-sudo/cook-compass-bot/actions/workflows/deploy-pages.yml)
+
 دستیار هوشمند «امشب چی بپزم؟» برای کاربران فارسی‌زبان — **۱۰۰٪ Serverless روی زیرساخت رسمی [Telegram Serverless](https://core.telegram.org/bots/serverless)**. بدون VPS، بدون webhook دستی، بدون Polling.
 
 > **مشخصات فنی:** کد JavaScript خالص داخل V8 Isolate کنار Bot API · دیتابیس SQLite داخلی پلتفرم · مدیریت وضعیت FSM روی دیتابیس (بدون state در حافظه) · خروجی AI فقط JSON ساختاریافته.
 
-🔗 **بات در تلگرام:** [@CookCompassBot](https://t.me/CookCompassBot) · 🌐 **صفحه معرفی (GitHub Pages):** پس از اولین اجرای موفق workflow در تب Actions صفحه‌ی معرفی منتشر می‌شود: `https://<username>.github.io/cook-compass-bot/`
+🔗 **بات در تلگرام:** [@CookCompassBot](https://t.me/CookCompassBot) · 🌐 **صفحه معرفی (GitHub Pages):** [ragheb2025k-sudo.github.io/cook-compass-bot](https://ragheb2025k-sudo.github.io/cook-compass-bot/)
 
 ---
 
