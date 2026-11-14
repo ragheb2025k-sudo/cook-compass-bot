@@ -1,0 +1,17 @@
+# tgcloud CLI state (credentials + local snapshot) — never commit
+.tgcloud/
+
+# dependencies
+node_modules/
+
+# secrets / env
+.env
+.env.local
+.env*.local
+
+# generated landing data (rebuilt by CI on every deploy)
+landing/status.json
+
+# misc
+*.log
+.DS_Store

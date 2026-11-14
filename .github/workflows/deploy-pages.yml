@@ -1,0 +1,65 @@
+name: Deploy Landing to GitHub Pages
+
+# Builds and publishes the static landing page (landing/) to GitHub Pages.
+# Before uploading, scripts/build-status.mjs calls the Telegram Bot API and
+# writes landing/status.json so the page's «وضعیت زنده» card shows real bot
+# health. The schedule re-runs every 10 minutes to keep that data fresh.
+#
+# Required repository secret:
+#   TELEGRAM_BOT_TOKEN — the bot token (used only inside CI; never published)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'landing/**'
+      - 'scripts/build-status.mjs'
+      - 'bot-meta.json'
+      - '.github/workflows/deploy-pages.yml'
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build landing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate live status snapshot
+        run: node scripts/build-status.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: landing
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

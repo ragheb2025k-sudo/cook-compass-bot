@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>قطب‌نمای آشپزی — دستیار «امشب چی بپزم؟» در تلگرام</title>
+  <meta name="description" content="ربات آشپز هوشمند تلگرام برای فارسی‌زبان‌ها: از روی مواد واقعی یخچالت، سلیقه و وقتت، بهترین غذا را با دستور کامل و مقادیر دقیق پیشنهاد می‌دهد — کاملاً بدون سرور، روی زیرساخت خود تلگرام." />
+  <meta name="theme-color" content="#FFFBF5" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="قطب‌نمای آشپزی 🧭 | @CookCompassBot" />
+  <meta property="og:description" content="دیگه نپرس «امشب چی بپزم؟» — پیشنهاد غذا از روی یخچال واقعی تو، برنامه غذایی هفتگی، نجات مواد و گردونه شانس. کاملاً بدون سرور روی تلگرام." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AD%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+
+    <!-- ============================== Header ============================== -->
+    <header class="site-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <span class="brand-emoji" aria-hidden="true">🧭</span>
+          <span class="brand-name">قطب‌نمای آشپزی</span>
+          <span class="badge badge-secondary hide-sm">Telegram Serverless</span>
+        </div>
+        <a class="btn btn-amber btn-sm" href="https://t.me/CookCompassBot" target="_blank" rel="noopener noreferrer">
+          <svg class="ic flip-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+          شروع در تلگرام
+        </a>
+      </div>
+    </header>
+
+    <main class="site-main">
+
+      <!-- ============================== Hero ============================== -->
+      <section class="hero">
+        <div class="container hero-inner">
+          <span class="badge badge-outline hero-badge">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>
+            ربات آشپز هوشمند تلگرام
+          </span>
+          <h1 class="hero-title">دیگه نپرس <span class="accent">&laquo;امشب چی بپزم؟&raquo;</span></h1>
+          <p class="hero-desc">
+            قطب‌نمای آشپزی از روی مواد واقعی یخچالت، سلیقه و وقتت، بهترین غذا رو با دستور کامل و
+            مقادیر دقیق پیشنهاد می‌ده — کاملاً بدون سرور، روی زیرساخت خود تلگرام.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-amber btn-lg" href="https://t.me/CookCompassBot" target="_blank" rel="noopener noreferrer">
+              <svg class="ic flip-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+              شروع در تلگرام
+            </a>
+          </div>
+          <p class="hero-hint">
+            توی تلگرام به <bdi dir="ltr" class="handle">@CookCompassBot</bdi> پیام بده یا
+            <code dir="ltr" class="kbd">/start</code> بزن
+          </p>
+        </div>
+      </section>
+
+      <!-- ============================ Live status ============================ -->
+      <section id="status" class="section" aria-label="وضعیت زنده ربات">
+        <div class="container">
+          <div class="section-heading">
+            <span class="badge badge-outline">مانیتورینگ زنده</span>
+            <h2>وضعیت ربات، همین الان</h2>
+            <p>اتصال وب‌هوک، صف پیام‌های در انتظار و موتور پیشنهاد — مستقیم از سرورهای تلگرام.</p>
+          </div>
+
+          <div class="status-card" role="region" aria-label="وضعیت زنده ربات قطب‌نمای آشپزی">
+            <div class="status-head">
+              <div class="status-head-text">
+                <h3 class="status-title">
+                  <span class="dot-wrap" id="status-dot" aria-hidden="true"><span class="dot dot-amber"></span></span>
+                  وضعیت زنده ربات
+                </h3>
+                <p class="status-desc">سلامت وب‌هوک، صف پیام‌ها و موتور پیشنهاد غذا — دریافت مستقیم از تلگرام</p>
+              </div>
+              <button class="icon-btn" id="status-refresh" type="button" aria-label="بررسی مجدد وضعیت">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              </button>
+            </div>
+            <div id="status-body">
+              <div class="skeleton-stack" aria-hidden="true">
+                <div class="skeleton-row"><span class="sk sk-sq"></span><span class="sk sk-w24"></span><span class="sk sk-w32"></span></div>
+                <span class="sk sk-line"></span>
+                <span class="sk sk-line sk-80"></span>
+                <span class="sk sk-line sk-60"></span>
+                <span class="sk sk-line sk-66"></span>
+                <span class="sr-only">در حال دریافت وضعیت ربات…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== Features ============================== -->
+      <section id="features" class="section section-alt" aria-labelledby="features-title">
+        <div class="container">
+          <div class="section-heading">
+            <span class="badge badge-outline">امکانات</span>
+            <h2 id="features-title">پنج ابزار برای آشپزخونه‌ی تو</h2>
+            <p>از جست‌وجوی سریع تا نجات مواد و برنامه‌ریزی هفته — همه با یک ربات.</p>
+          </div>
+          <div class="grid grid-3">
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">🧊</div>
+              <h3 class="card-title">یخچالم چی داره؟</h3>
+              <p class="card-desc">از روی مواد واقعی یخچالت غذا پیشنهاد می‌دهد؛ با لمس یک دکمه موادت را تیک بزن</p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">🚑</div>
+              <h3 class="card-title">نجات مواد در حال فساد</h3>
+              <p class="card-desc">موادِ نزدیک به خراب شدن را بنویس تا قبل از فساد نجاتشان بدهد</p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">📅</div>
+              <h3 class="card-title">برنامه غذایی هفتگی</h3>
+              <p class="card-desc">ناهار و شام یک هفته با گزینه «پخت و فریز» و لیست خرید دسته‌بندی‌شده</p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">🎰</div>
+              <h3 class="card-title">گردونه شانس</h3>
+              <p class="card-desc">یک انتخاب قطعی با مقادیر دقیق مواد برای نفرات خانواده</p>
+            </article>
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">⚡</div>
+              <h3 class="card-title">فیلترهای هوشمند</h3>
+              <p class="card-desc">زیر ۲۰ دقیقه، کم‌ظرف، اقتصادی آخر ماه، تنوع‌طلبی بین‌المللی</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ Architecture ============================ -->
+      <section id="architecture" class="section" aria-labelledby="architecture-title">
+        <div class="container">
+          <div class="section-heading">
+            <span class="badge badge-outline">معماری</span>
+            <h2 id="architecture-title">سبک، ساده و بدون سرور</h2>
+            <p>ربات روی زیرساخت خود تلگرام اجرا می‌شود؛ نه داکر، نه VPS، نه دردسر.</p>
+          </div>
+          <div class="grid grid-4">
+            <div class="arch-item">
+              <svg class="ic arch-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+              <h3>V8 Isolate</h3>
+              <p>اجرا روی Telegram Serverless، مستقیم روی زیرساخت خود تلگرام</p>
+            </div>
+            <div class="arch-item">
+              <svg class="ic arch-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+              <h3>دیتابیس SQLite داخلی</h3>
+              <p>پروفایل، سابقه پخت، FSM و برنامه‌ها روی پلتفرم</p>
+            </div>
+            <div class="arch-item">
+              <svg class="ic arch-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"/><path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06"/><path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8"/></svg>
+              <h3>وب‌هوک مدیریت‌شده</h3>
+              <p>تنظیم و نگهداری توسط پلتفرم — بدون هیچ سروری</p>
+            </div>
+            <div class="arch-item">
+              <svg class="ic arch-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>
+              <h3>AI ساختاریافته</h3>
+              <p>خروجی JSON ساختاریافته + پنجره ۱۴ روز بدون تکرار</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ How it works ============================ -->
+      <section id="how" class="section section-alt" aria-labelledby="how-title">
+        <div class="container">
+          <div class="section-heading">
+            <span class="badge badge-outline">شروع سریع</span>
+            <h2 id="how-title">سه قدم تا اولین پیشنهاد</h2>
+            <p>کمتر از یک دقیقه طول می‌کشد تا اولین دستور پخت را بگیری.</p>
+          </div>
+          <div class="steps">
+            <div class="steps-line" aria-hidden="true"></div>
+            <div class="step">
+              <span class="step-num" aria-hidden="true">۱</span>
+              <h3>/start بزن و پروفایل بساز</h3>
+              <p>محدودیت غذایی، نفرات خانواده و سطح آشپزی‌ات را مشخص کن.</p>
+            </div>
+            <div class="step">
+              <span class="step-num" aria-hidden="true">۲</span>
+              <h3>مواد یخچالت را تیک بزن یا تایپ کن</h3>
+              <p>فیلترهای هوشمند را هم فعّال کن؛ زیر ۲۰ دقیقه، کم‌ظرف یا اقتصادی.</p>
+            </div>
+            <div class="step">
+              <span class="step-num" aria-hidden="true">۳</span>
+              <h3>دستور کامل با مقادیر دقیق بگیر</h3>
+              <p>گردونه شانس و برنامه غذایی هفتگی هم همیشه در دسترس‌اند.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ============================== Footer ============================== -->
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <p class="footer-note">
+          🧭 قطب‌نمای آشپزی | اجرا روی Telegram Serverless ·
+          <a href="https://t.me/CookCompassBot" target="_blank" rel="noopener noreferrer" dir="ltr" class="footer-link">@CookCompassBot</a>
+        </p>
+        <div class="footer-links">
+          <a href="https://github.com/ragheb2025k-sudo/cook-compass-bot" target="_blank" rel="noopener noreferrer" class="footer-link">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+            سورس کد در گیت‌هاب
+          </a>
+          <a href="https://t.me/CookCompassBot" target="_blank" rel="noopener noreferrer" class="footer-link">
+            رفتن به ربات
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          </a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

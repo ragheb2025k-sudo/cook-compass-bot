@@ -1,0 +1,26 @@
+{
+  "name": "قطب‌نمای آشپزی",
+  "username": "CookCompassBot",
+  "url": "https://t.me/CookCompassBot",
+  "platform": "Telegram Serverless",
+  "webhook": "https://cloud.telegram.org/app9080578708/webhook",
+  "ai": {
+    "provider": "pollinations (سازگار با OpenAI، بدون کلید)",
+    "model": "openai-fast",
+    "mockAvailable": true,
+    "switchTo": "Groq / OpenRouter / Gemini از طریق cook-compass-bot/tgcloud/lib/config.js"
+  },
+  "features": [
+    { "icon": "🧊", "title": "یخچالم چی داره؟", "desc": "از روی مواد واقعی یخچالت غذا پیشنهاد می‌دهد؛ با لمس یک دکمه موادت را تیک بزن" },
+    { "icon": "🚑", "title": "نجات مواد در حال فساد", "desc": "موادِ نزدیک به خراب شدن را بنویس تا قبل از فساد نجاتشان بدهد" },
+    { "icon": "📅", "title": "برنامه غذایی هفتگی", "desc": "ناهار و شام یک هفته با گزینه «پخت و فریز» و لیست خرید دسته‌بندی‌شده" },
+    { "icon": "🎰", "title": "گردونه شانس", "desc": "یک انتخاب قطعی با مقادیر دقیق مواد برای نفرات خانواده" },
+    { "icon": "⚡", "title": "فیلترهای هوشمند", "desc": "زیر ۲۰ دقیقه، کم‌ظرف، اقتصادی آخر ماه، تنوع‌طلبی بین‌المللی" }
+  ],
+  "architecture": [
+    "Telegram Serverless — V8 Isolate روی زیرساخت تلگرام",
+    "دیتابیس SQLite داخلی پلتفرم (پروفایل، سابقه پخت، FSM، برنامه‌ها)",
+    "Webhook مدیریت‌شده توسط پلتفرم — بدون سرور",
+    "AI با خروجی JSON ساختاریافته + پنجره ۱۴ روز بدون تکرار"
+  ]
+}

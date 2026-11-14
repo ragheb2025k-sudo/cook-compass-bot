@@ -1,0 +1,58 @@
+name: Deploy Bot to Telegram Serverless
+
+# Deploys the bot code (tgcloud/) to the official Telegram Serverless platform
+# via the tgcloud CLI whenever bot code changes on main.
+#
+# Required repository secret:
+#   TGCLOUD_TOKEN — the CLI access token from BotFather → Bot → Serverless →
+#                   CLI Access (format: app<id>:<secret>)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tgcloud/**'
+      - '.github/workflows/deploy-bot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-bot
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: tgcloud push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install tgcloud CLI
+        run: npm ci
+
+      - name: Deploy modules (tgcloud push)
+        run: npx tgcloud push --no-pager
+        env:
+          CI: true
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+
+      - name: Apply pending schema migrations (safe mode)
+        run: npx tgcloud migrate --safe --no-pager
+        env:
+          CI: true
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+
+      - name: Verify webhook health
+        run: npx tgcloud webhook --no-pager
+        env:
+          CI: true
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
