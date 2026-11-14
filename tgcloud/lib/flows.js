@@ -2,7 +2,7 @@
 // (✅ همینه! / ❌ بعدی), Rescue Mode ("نجات مواد در حال فساد") and the
 // "گردونه شانس" randomizer. All state round-trips through the sessions table.
 
-import { editMessageText, answerCb } from './telegram.js';
+import { editMessageText, sendMessage, answerCb } from './telegram.js';
 import { decideKb, decideExhaustedKb, randomKb, MENU_ROW } from './keyboards.js';
 import {
   decideHeader,
@@ -13,11 +13,12 @@ import {
   randomResultHeader,
   RECIPE_PARSE_ERROR,
 } from './texts.js';
-import { getProfile, setSession, getSession, addHistory, getRecentDishes } from './store.js';
+import { getProfile, setSession, getSession, addHistory, getRecentDishes, aiQuota } from './store.js';
 import { generateRecipes, generateRandom } from './ai.js';
 import { recipeCard } from './format.js';
 import { DIET_OPTIONS, SKILL_OPTIONS, FILTERS, RECIPES_PER_ROUND } from './config.js';
 import { startOnboarding } from './onboarding.js';
+import { AI_QUOTA_ALERT } from './texts.js';
 
 /* ------------------------------------------------------------------ */
 /* Label helpers                                                       */
@@ -55,6 +56,7 @@ export async function ensureProfile(chatId, messageId = null) {
 export async function buildAiContext(tgId, profile, session, { rescueItems = null, avoid = [] } = {}) {
   const exclude = await getRecentDishes(tgId);
   const pantry = session?.pantry ?? {};
+  const planq = session?.planq ?? null;
   const ctx = {
     household: profile.household,
     dietPrompt: dietPromptOf(profile.diet),
@@ -65,6 +67,14 @@ export async function buildAiContext(tgId, profile, session, { rescueItems = nul
     rescue: rescueItems ?? [],
     exclude,
     avoid,
+    // Weekly protein/light-dinner quotas from the planner questionnaire —
+    // relevant to plan generation; harmless (unused) in other prompts.
+    weeklyTargets: planq ? {
+      meat: Number(planq.meat ?? 0),
+      fish: Number(planq.fish ?? 0),
+      chicken: Number(planq.chicken ?? 0),
+      light: Number(planq.light ?? 0),
+    } : null,
   };
   // Debug trail for suggestion quality — visible in `npx tgcloud run` output.
   console.info('[ai ctx]', JSON.stringify({
@@ -74,8 +84,22 @@ export async function buildAiContext(tgId, profile, session, { rescueItems = nul
     rescue: ctx.rescue,
     filters: ctx.filters.length,
     excluded: ctx.exclude.length,
+    weekly: ctx.weeklyTargets,
   }));
   return ctx;
+}
+
+/**
+ * AI wallet guard (Gate 4.1.3): increment the per-user daily counter and
+ * render the quota alert on `messageId` when the daily limit is exhausted.
+ * Returns true when the caller may proceed with the AI call.
+ */
+export async function aiQuotaGuard(chatId, messageId) {
+  const quota = await aiQuota(chatId);
+  if (quota.allowed) return true;
+  if (messageId) await editMessageText(chatId, messageId, AI_QUOTA_ALERT, MENU_ROW);
+  else await sendMessage(chatId, AI_QUOTA_ALERT, MENU_ROW);
+  return false;
 }
 
 /* ------------------------------------------------------------------ */
@@ -90,6 +114,8 @@ export async function buildAiContext(tgId, profile, session, { rescueItems = nul
 export async function presentSuggestions(chatId, messageId, session, { source = 'pantry', rescueItems = [] } = {}) {
   const profile = await ensureProfile(chatId);
   if (!profile) return;
+  // AI wallet guard (Gate 4.1.3).
+  if (!(await aiQuotaGuard(chatId, messageId))) return;
   try {
     const ctx = await buildAiContext(chatId, profile, session, { rescueItems, avoid: session.avoid ?? [] });
     const recipes = await generateRecipes(ctx, RECIPES_PER_ROUND);
@@ -203,6 +229,8 @@ export async function startRandom(chatId, messageId, cqId = null) {
   const profile = await ensureProfile(chatId, messageId);
   if (!profile) return;
   if (cqId) await answerCb(cqId);
+  // AI wallet guard (Gate 4.1.3).
+  if (!(await aiQuotaGuard(chatId, messageId))) return;
   await editMessageText(chatId, messageId, RANDOM_SPINNING, null);
   const session = (await getSession(chatId)) ?? {};
   try {

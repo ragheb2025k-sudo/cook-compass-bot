@@ -1,0 +1,10 @@
+/* Self-hosted Vazirmatn (variable weight) — no third-party font CDN,
+   so visitor IPs are never leaked to font providers (GDPR hygiene). */
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("fonts/Vazirmatn-var.woff2") format("woff2 supports variations"),
+       url("fonts/Vazirmatn-var.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}

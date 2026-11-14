@@ -59,3 +59,37 @@ export const mealPlans = table('meal_plans', {
   shoppingList: json('shopping_list').notNull(),
   createdAt:    integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
 });
+
+// ---------------------------------------------------------------------------
+// Security & resilience guards (serverless hardening):
+//   seenUpdates — webhook idempotency: message/callback ids already processed,
+//                 so a platform-level redelivery never double-fires a flow
+//                 (Gate 1.3.4). TTL-swept lazily.
+//   rateLimits  — per-chat rolling 60s action counter (Gate 4.1.1).
+//   aiUsage     — per-user daily AI-call counter (Gate 4.1.3 wallet guard).
+// Raw epoch-seconds integers are used on purpose: where-clauses compare raw
+// values in this runtime.
+// ---------------------------------------------------------------------------
+export const seenUpdates = table('seen_updates', {
+  key:       text('key').primaryKey(),              // "m:<chatId>:<message_id>" | "c:<callback_id>"
+  chatId:    integer('chat_id'),
+  createdAt: integer('created_at').notNull(),       // epoch seconds
+}, (t) => ({
+  expIdx: index('idx_seen_created').on(t.createdAt),
+}));
+
+export const rateLimits = table('rate_limits', {
+  chatId:      integer('chat_id').primaryKey(),
+  windowStart: integer('window_start').notNull(),   // epoch seconds
+  count:       integer('count').notNull().default(0),
+});
+
+export const aiUsage = table('ai_usage', {
+  key:       text('key').primaryKey(),              // "<tgId>:<YYYY-MM-DD>"
+  tgId:      integer('tg_id').notNull(),
+  count:     integer('count').notNull().default(0),
+  expiresAt: integer('expires_at').notNull(),       // epoch seconds (TTL sweep)
+}, (t) => ({
+  expIdx: index('idx_ai_usage_expiry').on(t.expiresAt),
+  userIdx: index('idx_ai_usage_user').on(t.tgId),
+}));

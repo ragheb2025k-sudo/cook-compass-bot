@@ -40,6 +40,49 @@ export const AI = {
   extraBody: { reasoning_effort: 'low' }, // pollinations latency control — remove when switching to Groq/OpenRouter
 };
 
+// ---------------------------------------------------------------------------
+// LEGAL & OWNER IDENTITY — injected into /privacy, /terms, /support,
+// /paysupport and every legal notice (compliance requirement; single source).
+// ---------------------------------------------------------------------------
+export const LEGAL = {
+  BRAND_NAME: 'Botmaker Telegram',
+  CREATOR_CHANNEL_URL: 'https://t.me/Botmaker_Telegram',
+  SUPPORT_CHANNEL_HANDLE: '@Botmaker_Telegram',
+  CONTACT_EMAIL: 'ragheb2025k@gmail.com',
+  LAST_UPDATED: '۲۳ آبان ۱۴۰۳',
+};
+
+// ---------------------------------------------------------------------------
+// Abuse guards (serverless resilience & cost protection):
+//   - MAX_ACTIONS_PER_MIN : per-user throttle on every message/button press
+//   - AI_DAILY_LIMIT      : per-user daily cap on AI provider calls
+//   - SEEN_TTL_SEC        : update-idempotency window (duplicate webhooks)
+//   - MAX_INPUT_CHARS     : hard cap on accepted free-text length
+// ---------------------------------------------------------------------------
+export const GUARDS = {
+  MAX_ACTIONS_PER_MIN: 25,
+  AI_DAILY_LIMIT: 40,
+  SEEN_TTL_SEC: 3600,
+  MAX_INPUT_CHARS: 800,
+};
+
+// ---------------------------------------------------------------------------
+// Weekly planner questionnaire — سهمیه پروتئین و شام سبک هر هفته.
+// The user answers 0..4 per protein before the plan is generated; questions
+// forbidden by the profile diet are skipped and forced to 0.
+// ---------------------------------------------------------------------------
+export const WEEKLY_PLAN = {
+  COUNT_OPTIONS: [0, 1, 2, 3, 4],
+  ECONOMY_HINT: '💰 گوشت قرمز و ماهی به‌خاطر قیمت بالا معمولاً هر دو هفته یک بار به‌صرفه است — سهمیه این هفته را خودت تعیین می‌کنی.',
+  QUESTIONS: {
+    meat:    { key: 'meat',    emoji: '🥩', question: 'تو این هفته چند وعده گوشت قرمز داریم؟' },
+    fish:    { key: 'fish',    emoji: '🐟', question: 'تو این هفته چند وعده ماهی داریم؟' },
+    chicken: { key: 'chicken', emoji: '🍗', question: 'تو این هفته چند وعده مرغ داریم؟' },
+    light:   { key: 'light',   emoji: '🥗', question: 'چند شام سبک توی هفته دوست داری؟ (سوپ، سالاد، املت، نان‌وپنیر و…)' },
+  },
+  ORDER: ['meat', 'fish', 'chicken', 'light'],
+};
+
 // FSM state lifetime — a half-started flow quietly dies after this.
 export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 

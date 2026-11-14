@@ -8,6 +8,13 @@ import { sleep } from './util.js';
 
 const NO_PREVIEW = { link_preview_options: { is_disabled: true } };
 
+// Gate 1.2.3 — never let a Bot-API token appear in a log line, even if an
+// error object happens to carry the request URL it failed on.
+const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]{20,}/g;
+function redact(value) {
+  return String(value ?? '').replace(TOKEN_RE, 'bot***:***');
+}
+
 const ERROR_TEXT = [
   '😮‍💨 <b>وای! انگار آشپزخونه‌م یه لحظه برقش رفت.</b>',
   '',
@@ -53,7 +60,7 @@ export async function sendMessage(chatId, text, inlineKeyboard = null) {
         await sleep((Number(e.parameters.retry_after) + 1) * 1000);
         continue;
       }
-      console.error('sendMessage failed:', e?.description ?? e?.message ?? e);
+      console.error('sendMessage failed:', redact(e?.description ?? e?.message ?? e));
       return null;
     }
   }
@@ -78,7 +85,7 @@ export async function editMessageText(chatId, messageId, text, inlineKeyboard = 
         continue;
       }
       if (isBenignEditError(e)) return null;
-      console.error('editMessageText failed:', e?.description ?? e?.message ?? e);
+      console.error('editMessageText failed:', redact(e?.description ?? e?.message ?? e));
       return null;
     }
   }
@@ -93,7 +100,7 @@ export async function answerCb(callbackId, text = null, showAlert = false) {
       ...(text ? { text, show_alert: showAlert } : {}),
     });
   } catch (e) {
-    console.warn('answerCallbackQuery failed:', e?.description ?? e?.message);
+    console.warn('answerCallbackQuery failed:', redact(e?.description ?? e?.message));
   }
 }
 

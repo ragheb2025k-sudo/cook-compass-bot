@@ -46,14 +46,17 @@ export function recipeCard(recipe, { headerNote = null, pickedNote = null } = {}
   return lines.join('\n');
 }
 
-/** Day-by-day 7-day overview (ناهار + شام per day). */
+/** Day-by-day 7-day overview (ناهار + جایگزین + شام + جایگزین + تگ شام سبک). */
 export function planOverview(plan, household) {
   const lines = [];
   for (const day of plan.days) {
     const label = WEEKDAYS_FA[day.n - 1] ?? `روز ${fa(day.n)}`;
     lines.push(`🟠 <b>روز ${fa(day.n)} — ${esc(label)}</b>`);
     lines.push(`• ☀️ ناهار: ${esc(day.lunch || '—')}`);
-    lines.push(`• 🌙 شام: ${esc(day.dinner || '—')}`);
+    if (day.lunchAlt) lines.push(`  🔁 جایگزین: ${esc(day.lunchAlt)}`);
+    const lightTag = day.dinnerLight ? ' 🥗 <i>(سبک)</i>' : '';
+    lines.push(`• 🌙 شام: ${esc(day.dinner || '—')}${lightTag}`);
+    if (day.dinnerAlt) lines.push(`  🔁 جایگزین: ${esc(day.dinnerAlt)}`);
   }
   if (plan.mode === 'batch' && plan.batchNotes?.length) {
     lines.push('', '🫙 <b>یادداشت‌های پخت و فریز:</b>');

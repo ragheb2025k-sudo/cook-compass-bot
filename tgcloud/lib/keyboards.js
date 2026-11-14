@@ -6,14 +6,17 @@
 //   fl:<key> (filter toggle)
 //   dec:next | dec:pick | dec:again
 //   rnd | rnd:again | rnd:add
+//   pq:<field>:<n> (weekly-plan questionnaire: meat/fish/chicken/light 0..4)
 //   pl:simple | pl:batch | pl:shop | pl:cook | pl:again
 //   pr | pr:edit:diet | pr:edit:avoid | pr:edit:household | pr:edit:skill | pr:clearhist | pr:clearhist:yes
+//   del:yes | del:no (delete-my-data confirmation)
 //   retry
 
-import { PANTRY_ITEMS, FILTERS, DIET_OPTIONS, SKILL_OPTIONS, WEEKDAYS_FA } from './config.js';
+import { PANTRY_ITEMS, FILTERS, DIET_OPTIONS, SKILL_OPTIONS, WEEKDAYS_FA, WEEKLY_PLAN, LEGAL } from './config.js';
 
 export const kb = (rows) => ({ inline_keyboard: rows });
 const btn = (text, callback_data) => ({ text, callback_data });
+const btnUrl = (text, url) => ({ text, url });
 
 export const MENU_ROW = [[btn('🏠 منوی اصلی', 'menu')]];
 
@@ -129,6 +132,21 @@ export function planModeKb() {
   ]);
 }
 
+/** Weekly-plan questionnaire — ۰..۴ quota buttons for one question. */
+export function planQKb(field) {
+  const q = WEEKLY_PLAN.QUESTIONS[field];
+  const unit = field === 'light' ? 'شام سبک' : 'وعده';
+  const rows = [];
+  rows.push(WEEKLY_PLAN.COUNT_OPTIONS.map((n) => btn(`${q.emoji} ${faNum(n)} ${unit}`, `pq:${field}:${n}`)));
+  rows.push([btn('🏠 منوی اصلی', 'menu')]);
+  return kb(rows);
+}
+
+function faNum(n) {
+  const digits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  return String(n).replace(/\d/g, (d) => digits[Number(d)]);
+}
+
 export function planKb(plan) {
   const rows = [];
   const days = plan?.days ?? [];
@@ -167,5 +185,21 @@ export function historyClearKb() {
 export function rescueKb() {
   return kb([
     [btn('🏠 منوی اصلی', 'menu')],
+  ]);
+}
+
+/** /support — direct URL buttons to the official support channel. */
+export function supportKb() {
+  return kb([
+    [btnUrl('💬 کانال پشتیبانی تلگرام', LEGAL.CREATOR_CHANNEL_URL)],
+    [btn('🏠 منوی اصلی', 'menu')],
+  ]);
+}
+
+/** /delete_my_data — destructive-action confirmation (Gate 5.1.5). */
+export function deleteDataKb() {
+  return kb([
+    [btn('🗑 بله، همه‌چیز را پاک کن', 'del:yes')],
+    [btn('✖️ بی‌خیال', 'del:no')],
   ]);
 }

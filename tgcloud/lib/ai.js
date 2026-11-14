@@ -210,7 +210,16 @@ function randomUserPrompt(ctx) {
 function planUserPrompt(ctx, mode) {
   const lines = ['یک درخواست «برنامه غذایی هفتگی» با مشخصات زیر:'];
   lines.push(...baseContextLines(ctx));
-  lines.push('- برنامه: ۷ روز، هر روز ناهار و شام (فقط نام غذاها، نه دستور کامل)');
+  const t = ctx.weeklyTargets;
+  if (t) {
+    lines.push(`- 🎯 سهمیه پروتئین این هفته (الزام دقیق کاربر): گوشت قرمز دقیقاً ${t.meat} وعده، ماهی دقیقاً ${t.fish} وعده، مرغ دقیقاً ${t.chicken} وعده — عدد صفر یعنی مطلقاً هیچ وعده‌ای شامل آن ماده نباشد؛ بیش از سهمیه هم مطلقاً نباشد. بقیه وعده‌ها با حبوبات، تخم‌مرغ، لبنیات و سبزیجات چیده شود.`);
+    lines.push(`- 🥗 دقیقاً ${t.light} وعده شام «سبک» باشد (سوپ، سالاد کامل، املت یا کوکوی سبک، نان و پنیر و سبزی، ماست‌ورزه و…) و همان روزها dinner_light=true باشد.`);
+  }
+  lines.push('- ⚠️ قاعده برنج: در یک روز هرگز دو وعده برنجی نباشد — اگر ناهار برنجی است (پلو، چلو، کته، ته‌چین یا هر غذایی که با برنج سرو می‌شود)، شامِ همان روز حتماً غیربرنجی باشد (ماکارونی، غذای نانی، خوراک با نان و…)');
+  lines.push('- 🔁 برای «هر» وعده یک جایگزین واقع‌بینانه و کاملاً متفاوت پیشنهاد بده (lunch_alt و dinner_alt): غذایی که با همان مواد درست می‌شود ولی ماهیتش فرق دارد (مثلاً به‌جای برنجی، نانی؛ به‌جای خورش، کوکو)');
+  lines.push('- 🌈 تنوع بالا: هیچ اسم غذایی در هفته تکرار نشود؛ سبک‌ها متنوع باشند (خورش، پلو، ماکارونی، کوکو/املت، خوراک ساده، سوپ، غذای بین‌المللی ساده و…)');
+  lines.push('- 💰 اقتصادی بودن: گوشت قرمز و ماهی فقط تا سقف سهمیه کاربر؛ بقیه هفته با پروتئین‌های ارزان و گیاهی');
+  lines.push('- برنامه: ۷ روز، هر روز ناهار و شام (فقط نام غذاها + جایگزین‌ها، نه دستور کامل)');
   lines.push('- تنوع داشته باشد؛ خوراک‌های تکراری یا شبیه هم نباشد');
   if (mode === 'batch') {
     lines.push('- حالت «پخت و فریز»: حداقل ۲ پایه مشترک تعریف کن؛ پایه را با پورت دوبرابر در یک روز بپز و ۲ روز بعد در غذای کاملاً متفاوتی از آن استفاده کن (مثلاً مایه ماکارونی یا مرغ ریش‌ریش). اینها را در batch_notes به فارسی توضیح بده');
@@ -218,13 +227,13 @@ function planUserPrompt(ctx, mode) {
     lines.push('- حالت ساده: بدون پایه مشترک؛ batch_notes آرایه خالی باشد');
   }
   lines.push('');
-  lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار:');
+  lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار و همین کلیدها:');
   lines.push(JSON.stringify({
-    days: [{ n: 1, lunch: 'نام ناهار', dinner: 'نام شام' }],
+    days: [{ n: 1, lunch: 'نام ناهار', lunch_alt: 'جایگزین ناهار', dinner: 'نام شام', dinner_alt: 'جایگزین شام', dinner_light: false }],
     shopping_list: [{ category: 'پروتئین', items: [{ name: 'مرغ', qty: '۱ کیلوگرم' }] }],
     batch_notes: ['روز ۱ مرغ را دو برابر بپز و نصفش را فریز کن'],
   }));
-  lines.push('قواعد: day عدد ۱ تا ۷ است (۱ = شنبه)؛ دقیقاً ۷ روز؛ دسته‌های shopping_list فقط از این‌ها باشند: پروتئین، سبزیجات و میوه، حبوبات و غلات، لبنیات، سایر؛ خروجی فشرده باشد.');
+  lines.push('قواعد: day عدد ۱ تا ۷ است (۱ = شنبه)؛ دقیقاً ۷ روز؛ برای هر روز lunch، lunch_alt، dinner و dinner_alt بنویس؛ dinner_light فقط برای شام‌های سبک true باشد؛ دسته‌های shopping_list فقط از این‌ها باشند: پروتئین، سبزیجات و میوه، حبوبات و غلات، لبنیات، سایر؛ خروجی فشرده باشد.');
   return lines.join('\n');
 }
 
@@ -243,6 +252,7 @@ function buildCtx(ctx) {
     filters: (ctx.filters ?? []).map(String),
     exclude: (ctx.exclude ?? []).map(String),
     avoid: (ctx.avoid ?? []).map(String),
+    weeklyTargets: ctx.weeklyTargets ?? null,
   };
 }
 
@@ -266,20 +276,38 @@ export async function generateRandom(ctx) {
   return { recipe, funLine };
 }
 
-/** 7-day plan skeleton: day names + aggregated categorized shopping list.
- *  Recipes are generated on demand per day (generateDayRecipes) so every
- *  serverless invocation stays short. */
+/** 7-day plan skeleton: day names + alternatives + aggregated categorized
+ *  shopping list. Recipes are generated on demand per day (generateDayRecipes)
+ *  so every serverless invocation stays short.
+ *  Hard rules are validated here and one corrective retry is issued when the
+ *  model violates them (rice-per-day rule, dish repetition). */
 export async function generatePlan(ctx, mode) {
   const c = buildCtx(ctx);
-  const data = await chatJson(CHEF_SYSTEM, planUserPrompt(c, mode), {
-    maxTokens: AI.maxTokensPlan,
-    temperature: 0.75,
-  });
+  const basePrompt = planUserPrompt(c, mode);
+
+  let data = null;
+  let lastIssues = [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const prompt = attempt === 1
+      ? basePrompt
+      : `${basePrompt}\n\n⚠️ خروجی قبلی این قواعد را نقض کرد: ${lastIssues.join('؛ ')}. این بار با رعایت دقیق همه قواعد دوباره برنامه را بچین.`;
+    data = await chatJson(CHEF_SYSTEM, prompt, {
+      maxTokens: AI.maxTokensPlan,
+      temperature: 0.75,
+    });
+    lastIssues = validatePlanDays(data);
+    if (lastIssues.length === 0) break;
+    console.warn('plan rule violations:', lastIssues.join(' | '));
+  }
+
   const days = asArray(data.days)
     .map((d, i) => ({
       n: clampInt(d?.n, 1, 7, i + 1),
       lunch: String(d?.lunch ?? '').trim(),
+      lunchAlt: String(d?.lunch_alt ?? d?.lunchAlt ?? '').trim().slice(0, 120),
       dinner: String(d?.dinner ?? '').trim(),
+      dinnerAlt: String(d?.dinner_alt ?? d?.dinnerAlt ?? '').trim().slice(0, 120),
+      dinnerLight: Boolean(d?.dinner_light ?? d?.dinnerLight ?? false),
     }))
     .sort((a, b) => a.n - b.n);
   const shoppingList = asArray(data.shopping_list)
@@ -305,6 +333,36 @@ export async function generatePlan(ctx, mode) {
   return { mode, days, recipes: {}, shoppingList, batchNotes };
 }
 
+const RICE_DISH_RE = /پلو|چلو|کته|ته\u200cچین|ته چین|برنج|بریانی/;
+
+/** Deterministic check of the user's non-negotiable plan rules. */
+function validatePlanDays(data) {
+  const issues = [];
+  const days = asArray(data.days);
+  const names = [];
+  for (const d of days) {
+    const lunch = String(d?.lunch ?? '').trim();
+    const dinner = String(d?.dinner ?? '').trim();
+    if (lunch && dinner) {
+      // Rule: never two rice-based meals in the same day.
+      if (RICE_DISH_RE.test(lunch) && RICE_DISH_RE.test(dinner)) {
+        issues.push(`روز ${d?.n}: ناهار («${lunch}») و شام («${dinner}») هر دو برنجی‌اند — شام آن روز باید غیربرنجی شود`);
+      }
+    }
+    if (lunch) names.push(lunch);
+    if (dinner) names.push(dinner);
+  }
+  // Rule: no dish repeated within the week (variety).
+  const seen = new Set();
+  const dupes = [];
+  for (const name of names) {
+    if (seen.has(name)) dupes.push(name);
+    seen.add(name);
+  }
+  if (dupes.length) issues.push(`این غذاها تکرار شده‌اند: ${dupes.join('، ')}`);
+  return issues;
+}
+
 /** The 2 recipes (lunch + dinner) for one plan day, generated on demand. */
 export async function generateDayRecipes(ctx, plan, dayN) {
   const c = buildCtx(ctx);
@@ -313,6 +371,8 @@ export async function generateDayRecipes(ctx, plan, dayN) {
   lines.push(...baseContextLines(c));
   lines.push(`- ☀️ ناهار: دقیقاً با نام «${day.lunch}»`);
   lines.push(`- 🌙 شام: دقیقاً با نام «${day.dinner}»`);
+  if (day.dinnerLight) lines.push('- 🥗 شام این روز «سبک» است: دستور را سبک، کم‌چرب و کم‌حجم بچین (بدون برنج و غذای سنگین)');
+  if (RICE_DISH_RE.test(day.lunch)) lines.push('- ناهار این روز برنجی است؛ در مواد لازم همین غذا بمان و برای شام برنج نپز');
   lines.push('');
   lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار و همین کلیدها:');
   lines.push(JSON.stringify({

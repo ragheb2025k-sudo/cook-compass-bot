@@ -7,8 +7,8 @@
 
 import { db } from 'sdk';
 import { eq, lt, and, gte, desc } from 'sdk/db';
-import { profiles, sessions, cookingHistory, mealPlans } from '../schema.js';
-import { SESSION_TTL_MS, HISTORY_DAYS } from './config.js';
+import { profiles, sessions, cookingHistory, mealPlans, seenUpdates, rateLimits, aiUsage } from '../schema.js';
+import { SESSION_TTL_MS, HISTORY_DAYS, GUARDS } from './config.js';
 
 /* ------------------------------------------------------------------ */
 /* Profiles                                                            */
@@ -138,4 +138,81 @@ export async function savePlan(tgId, plan) {
 export async function getPlan(tgId) {
   const row = await db.select().from(mealPlans).where(eq(mealPlans.tgId, tgId)).get();
   return row ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Security guards — idempotency, throttle, AI quota (Gate 1.3.4,      */
+/* 4.1.1, 4.1.3). All DB-backed: the stateless contract holds.         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Duplicate-webhook idempotency (Gate 1.3.4). Marks an update as seen and
+ * returns true when it was ALREADY processed inside the TTL window — the
+ * caller then silently drops the redelivery.
+ * key = "m:<chatId>:<message_id>" for messages, "c:<callback_id>" for presses.
+ */
+export async function seenRecently(key, chatId = null) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const row = await db.select().from(seenUpdates).where(eq(seenUpdates.key, String(key))).get();
+  if (row && nowSec - row.createdAt < GUARDS.SEEN_TTL_SEC) return true;
+  await db.insert(seenUpdates)
+    .values({ key: String(key), chatId, createdAt: nowSec })
+    .onConflictDoUpdate({ target: seenUpdates.key, set: { createdAt: nowSec } })
+    .run();
+  // Lazy sweep of expired keys.
+  if (Math.random() < 0.1) {
+    await db.delete(seenUpdates).where(lt(seenUpdates.createdAt, nowSec - GUARDS.SEEN_TTL_SEC)).run();
+  }
+  return false;
+}
+
+/**
+ * Per-chat rolling 60s throttle (Gate 4.1.1). Increments the counter and
+ * returns true when the user has exceeded MAX_ACTIONS_PER_MIN.
+ */
+export async function hitRateLimit(chatId) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const row = await db.select().from(rateLimits).where(eq(rateLimits.chatId, chatId)).get();
+  if (!row || nowSec - row.windowStart >= 60) {
+    await db.insert(rateLimits)
+      .values({ chatId, windowStart: nowSec, count: 1 })
+      .onConflictDoUpdate({ target: rateLimits.chatId, set: { windowStart: nowSec, count: 1 } })
+      .run();
+    return false;
+  }
+  const count = (row.count ?? 0) + 1;
+  await db.update(rateLimits).set({ count }).where(eq(rateLimits.chatId, chatId)).run();
+  return count > GUARDS.MAX_ACTIONS_PER_MIN;
+}
+
+/**
+ * Per-user daily AI quota (Gate 4.1.3). Increments the counter, returns
+ * { allowed, remaining } — call right before every AI invocation.
+ */
+export async function aiQuota(tgId) {
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const key = `${tgId}:${dayKey}`;
+  const expiresAt = Math.floor(Date.now() / 1000) + 2 * 24 * 60 * 60; // swept after 48h
+  const row = await db.select().from(aiUsage).where(eq(aiUsage.key, key)).get();
+  const count = (row?.count ?? 0) + 1;
+  await db.insert(aiUsage)
+    .values({ key, tgId, count, expiresAt })
+    .onConflictDoUpdate({ target: aiUsage.key, set: { count, expiresAt } })
+    .run();
+  // Lazy sweep of stale days.
+  if (Math.random() < 0.1) {
+    await db.delete(aiUsage).where(lt(aiUsage.expiresAt, Math.floor(Date.now() / 1000))).run();
+  }
+  return { allowed: count <= GUARDS.AI_DAILY_LIMIT, remaining: Math.max(0, GUARDS.AI_DAILY_LIMIT - count) };
+}
+
+/** GDPR / Telegram data-deletion (Gate 5.1.5): wipe every trace of a user. */
+export async function deleteAllUserData(tgId) {
+  await deleteSession(tgId);
+  await db.delete(profiles).where(eq(profiles.tgId, tgId)).run();
+  await db.delete(cookingHistory).where(eq(cookingHistory.tgId, tgId)).run();
+  await db.delete(mealPlans).where(eq(mealPlans.tgId, tgId)).run();
+  await db.delete(rateLimits).where(eq(rateLimits.chatId, tgId)).run();
+  await db.delete(aiUsage).where(eq(aiUsage.tgId, tgId)).run();
+  await db.delete(seenUpdates).where(eq(seenUpdates.chatId, tgId)).run();
 }
