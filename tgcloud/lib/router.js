@@ -41,7 +41,7 @@ import { GUARDS } from './config.js';
 import { startOnboarding, editField, handleObCallback, handleOnboardingText } from './onboarding.js';
 import { openFridge, togglePantry, toggleFilter, clearPantry, startSuggest, handlePantryText } from './pantry.js';
 import { cmdSaved, handleSavedCallback } from './saved.js';
-import { decideNext, decidePick, decideAgain, runRescue, startRandom, randomAdd, parseIngredientList, ensureProfile } from './flows.js';
+import { decideNext, decidePick, decideAgain, runRescue, startRandom, randomAdd, openCats, openCategory, catNext, catAdd, parseIngredientList, ensureProfile } from './flows.js';
 
 /* ------------------------------------------------------------------ */
 /* Message updates                                                     */
@@ -78,6 +78,7 @@ export async function handleMessage(message) {
         case '/rescue': return await cmdRescue(chatId);
         case '/plan': return await openPlanner(chatId);
         case '/random': return await cmdRandomMessage(chatId);
+        case '/cats': return await openCats(chatId);
         case '/recipes': return await cmdSaved(chatId);
         case '/profile': return await cmdProfile(chatId, null);
         case '/privacy': return await sendMessage(chatId, PRIVACY_TEXT, MENU_ROW);
@@ -159,6 +160,7 @@ async function routeCallback(chatId, messageId, data, cqId) {
         case 'rescue': return await cmdRescue(chatId, messageId);
         case 'plan': return await openPlanner(chatId, { edit: Boolean(messageId), messageId });
         case 'random': return await startRandom(chatId, messageId, cqId);
+        case 'cats': return await openCats(chatId, messageId, cqId);
         case 'profile': return await cmdProfile(chatId, messageId, cqId);
         default: return await showMenu(chatId, messageId);
       }
@@ -188,6 +190,14 @@ async function routeCallback(chatId, messageId, data, cqId) {
       if (sub === 'again') return await startRandom(chatId, messageId, cqId);
       if (sub === 'add') return await randomAdd(chatId, messageId, cqId);
       return await startRandom(chatId, messageId, cqId);
+    }
+
+    case 'cat': {
+      // 🍽 Category browse — cat | cat:<idx> | cat:next | cat:add
+      if (sub === 'next') return await catNext(chatId, messageId, cqId);
+      if (sub === 'add') return await catAdd(chatId, messageId, cqId);
+      if (sub === undefined) return await openCats(chatId, messageId, cqId);
+      return await openCategory(chatId, messageId, Number(sub), cqId);
     }
 
     case 'pq': {
@@ -242,6 +252,7 @@ async function routeCallback(chatId, messageId, data, cqId) {
       if (action === 'suggest') return await startSuggest(chatId, messageId, null);
       if (action === 'decide') return await decideAgain(chatId, messageId, null);
       if (action === 'random') return await startRandom(chatId, messageId, null);
+      if (action === 'cat') return await openCategory(chatId, messageId, Number(sub2 ?? 0), null);
       if (action === 'rescue') return await runRescue(chatId, messageId, session.rescueItems ?? []);
       if (action === 'plan') return await startPlan(chatId, messageId, sub2 ?? 'simple', null);
       if (action === 'shop') return await sendShoppingList(chatId, null);

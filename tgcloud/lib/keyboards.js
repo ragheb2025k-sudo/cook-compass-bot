@@ -6,6 +6,7 @@
 //   fl:<key> (filter toggle)
 //   dec:next | dec:pick | dec:again
 //   rnd | rnd:again | rnd:add
+//   cat (picker) | cat:<idx> | cat:next | cat:add (category browse)
 //   pq:<field>:<n> (weekly-plan questionnaire: meat/fish/chicken/light 0..4)
 //   pl:simple | pl:batch | pl:shop | pl:cook | pl:again
 //   sv | sv:pg:<n> | sv:go:<page>:<slot> | sv:clear | sv:clear:yes (saved archive)
@@ -27,6 +28,7 @@ export function menuKb() {
     [btn('🚑 نجات مواد در حال فساد', 'menu:rescue')],
     [btn('📅 برنامه غذایی هفتگی', 'menu:plan')],
     [btn('🎰 گردونه شانس', 'menu:random')],
+    [btn('🍽 دسته‌بندی غذاها', 'menu:cats')],
     [btn('📚 دستورهای ذخیره‌شده من', 'sv')],
     [btn('⚙️ تنظیمات من', 'menu:profile')],
   ]);
@@ -125,6 +127,30 @@ export function randomKb() {
     [btn('✅ ثبت در سابقه پخت', 'rnd:add')],
     [btn('🔄 بچرخون دوباره', 'rnd:again')],
     [btn('🏠 منوی اصلی', 'menu')],
+  ]);
+}
+
+/** Category picker — 2-per-row grid with live counts (indexes match
+ *  bankCatCounts() order; `cat:<idx>` opens a recipe from that category). */
+export function catsKb(catList) {
+  const rows = [];
+  for (let i = 0; i < catList.length; i += 2) {
+    const row = [];
+    for (let j = i; j < Math.min(i + 2, catList.length); j++) {
+      const c = catList[j];
+      row.push(btn(`${c.emoji} ${c.cat} (${faNum(c.count)})`, `cat:${j}`));
+    }
+    rows.push(row);
+  }
+  rows.push([btn('🏠 منوی اصلی', 'menu')]);
+  return kb(rows);
+}
+
+/** Category result — same shape as the wheel card: commit / next / back. */
+export function catKb() {
+  return kb([
+    [btn('✅ ثبت در سابقه پخت', 'cat:add'), btn('🔄 بعدی از این دسته', 'cat:next')],
+    [btn('📋 دسته‌بندی‌ها', 'cat'), btn('🏠 منوی اصلی', 'menu')],
   ]);
 }
 

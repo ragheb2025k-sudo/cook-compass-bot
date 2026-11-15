@@ -20,7 +20,7 @@ function footer() {
 export function recipeCard(recipe, { headerNote = null, pickedNote = null } = {}) {
   const lines = [];
   lines.push(`🍽 <b>${esc(recipe.name)}</b>`);
-  lines.push(`⏱ ${timeLabel(recipe.timeMin)} | 📊 ${esc(recipe.difficulty)}`);
+  lines.push(`⏱ ${timeLabel(recipe.timeMin)} | 📊 ${esc(recipe.difficulty)}${recipe.category ? ` | 🏷 ${esc(recipe.category)}` : ''}`);
   if (recipe.household) lines.push(`👩‍🍳 دستور برای ${recipe.household >= 7 ? '۶ نفر یا بیشتر' : `${fa(recipe.household)} نفر`}`);
   if (recipe.why) lines.push(`💬 ${esc(recipe.why)}`);
   if (headerNote) lines.push('', headerNote);

@@ -1,9 +1,10 @@
 // tgcloud/lib/flows.js — the decision engine flows: sequential recipe cards
-// (✅ همینه! / ❌ بعدی), Rescue Mode ("نجات مواد در حال فساد") and the
-// "گردونه شانس" randomizer. All state round-trips through the sessions table.
+// (✅ همینه! / ❌ بعدی), Rescue Mode ("نجات مواد در حال فساد"), the
+// "گردونه شانس" randomizer and the «🍽 دسته‌بندی غذاها» category browser.
+// All state round-trips through the sessions table.
 
 import { editMessageText, sendMessage, answerCb } from './telegram.js';
-import { decideKb, decideExhaustedKb, randomKb, MENU_ROW } from './keyboards.js';
+import { decideKb, decideExhaustedKb, randomKb, catsKb, catKb, MENU_ROW } from './keyboards.js';
 import {
   decideHeader,
   dishPicked,
@@ -12,6 +13,9 @@ import {
   PANTRY_LOADING,
   randomResultHeader,
   RECIPE_PARSE_ERROR,
+  CATS_HEADER,
+  catPickHeader,
+  CAT_EMPTY,
 } from './texts.js';
 import { getProfile, setSession, getSession, addHistory, getRecentDishes, aiQuota } from './store.js';
 import { saveServedRecipes } from './saved.js';
@@ -19,7 +23,7 @@ import { recipeCard } from './format.js';
 import { DIET_OPTIONS, SKILL_OPTIONS, FILTERS, RECIPES_PER_ROUND } from './config.js';
 import { startOnboarding } from './onboarding.js';
 import { AI_QUOTA_ALERT } from './texts.js';
-import { pickCandidates, bankRandom, bankRecipe } from './bank.js';
+import { pickCandidates, bankRandom, bankRecipe, bankCatCounts, bankRandomByCategory } from './bank.js';
 
 /* ------------------------------------------------------------------ */
 /* Label helpers                                                       */
@@ -304,6 +308,100 @@ export async function randomAdd(chatId, messageId, cqId) {
   await addHistory(chatId, recipe.name, 'random', { timeMin: recipe.timeMin, difficulty: recipe.difficulty });
   // 📚 Auto-save the committed wheel pick to the permanent archive.
   await saveServedRecipes(chatId, [recipe], 'random');
+  await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
+  const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
+  await editMessageText(chatId, messageId, card, MENU_ROW);
+  await answerCb(cqId, 'ثبت شد ✅ نوش جان!');
+}
+
+/* ------------------------------------------------------------------ */
+/* Category browse — «🍽 دسته‌بندی غذاها»                                */
+/* The bank's 23 food-type categories (خورشت، سوپ، دسر، نوشیدنی و…)
+   surfaced to the user: pick a category → random book recipe from it,
+   with «بعدی» for more from the same category. Same archive/history
+   semantics as the wheel: every served card auto-saves, commits also
+   enter the 14-day anti-repeat history. */
+/* ------------------------------------------------------------------ */
+
+/** Category picker — grid of all categories with live counts. */
+export async function openCats(chatId, messageId = null, cqId = null) {
+  if (cqId) await answerCb(cqId);
+  const session = (await getSession(chatId)) ?? {};
+  await setSession(chatId, { ...session, flow: null, retryCb: null });
+  const cats = bankCatCounts();
+  if (messageId) await editMessageText(chatId, messageId, CATS_HEADER, catsKb(cats));
+  else await sendMessage(chatId, CATS_HEADER, catsKb(cats));
+}
+
+/** One random recipe card from category `catIdx` (bankCatCounts() order). */
+export async function openCategory(chatId, messageId, catIdx, cqId = null) {
+  const profile = await ensureProfile(chatId, messageId);
+  if (!profile) return;
+  if (cqId) await answerCb(cqId);
+  const cats = bankCatCounts();
+  const meta = cats[catIdx];
+  if (!meta || meta.count === 0) {
+    if (messageId) await editMessageText(chatId, messageId, CAT_EMPTY, catsKb(cats));
+    else await sendMessage(chatId, CAT_EMPTY, catsKb(cats));
+    return;
+  }
+  const session = (await getSession(chatId)) ?? {};
+  try {
+    const catAvoid = [...(session.cat?.idx === catIdx ? session.cat.avoid ?? [] : [])];
+    const ctx = await buildAiContext(chatId, profile, session, { avoid: catAvoid });
+    const r = bankRandomByCategory(meta.cat, {
+      diet: ctx.dietKey,
+      avoidFoods: ctx.avoidFoods,
+      exclude: ctx.exclude,
+      avoid: ctx.avoid,
+    });
+    if (!r) {
+      // Everything diet-blocked or category empty — friendly redirect, no error.
+      if (messageId) await editMessageText(chatId, messageId, CAT_EMPTY, catsKb(cats));
+      else await sendMessage(chatId, CAT_EMPTY, catsKb(cats));
+      return;
+    }
+    const recipe = bankRecipe(r, { household: profile.household });
+    const seen = (session.cat?.idx === catIdx ? session.cat.seen ?? 0 : 0) + 1;
+    await setSession(chatId, {
+      flow: 'cat',
+      cat: { idx: catIdx, seen, avoid: [...catAvoid, recipe.name].slice(-14), recipe },
+      pantry: session.pantry ?? {},
+      retryCb: null,
+    });
+    // 📚 Each served card lands in the permanent archive too.
+    await saveServedRecipes(chatId, [recipe], 'cat');
+    const card = recipeCard(recipe, { household: profile.household });
+    await editMessageText(chatId, messageId, `${catPickHeader(meta.emoji, meta.cat, seen)}\n\n${card}`, catKb());
+  } catch (e) {
+    console.error('openCategory failed:', e?.message ?? e);
+    await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: `cat:${catIdx}` });
+    if (messageId) await editMessageText(chatId, messageId, RECIPE_PARSE_ERROR, retryKb(`cat:${catIdx}`));
+    else await sendMessage(chatId, RECIPE_PARSE_ERROR, MENU_ROW);
+  }
+}
+
+/** [🔄 بعدی از این دسته] — another recipe from the shown category. */
+export async function catNext(chatId, messageId, cqId) {
+  const session = await getSession(chatId);
+  if (!session || session.flow !== 'cat' || session.cat == null) {
+    await answerCb(cqId, 'این ردیف منقضی شده؛ از منوی اصلی شروع کن', true);
+    return;
+  }
+  return await openCategory(chatId, messageId, session.cat.idx, cqId);
+}
+
+/** [✅ ثبت در سابقه پخت] — commit the shown card to the 14-day history. */
+export async function catAdd(chatId, messageId, cqId) {
+  const session = await getSession(chatId);
+  if (!session || session.flow !== 'cat' || !session.cat?.recipe) {
+    await answerCb(cqId, 'این کارت منقضی شده', true);
+    return;
+  }
+  const profile = await getProfile(chatId);
+  const recipe = session.cat.recipe;
+  await addHistory(chatId, recipe.name, 'cat', { timeMin: recipe.timeMin, difficulty: recipe.difficulty });
+  await saveServedRecipes(chatId, [recipe], 'cat');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
   await editMessageText(chatId, messageId, card, MENU_ROW);

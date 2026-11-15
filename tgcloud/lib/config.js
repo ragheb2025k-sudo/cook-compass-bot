@@ -173,6 +173,7 @@ export const BOT_COMMANDS = [
   { command: 'rescue',         description: '🚑 نجات مواد در حال فساد' },
   { command: 'plan',           description: '📅 برنامه غذایی هفتگی' },
   { command: 'random',         description: '🎰 گردونه شانس' },
+  { command: 'cats',           description: '🍽 دسته‌بندی غذاها بر اساس نوع غذا' },
   { command: 'recipes',        description: '📚 دستورهای ذخیره‌شده من' },
   { command: 'profile',        description: '⚙️ تنظیمات و پروفایل من' },
   { command: 'help',           description: '📖 راهنمای کامل ربات' },

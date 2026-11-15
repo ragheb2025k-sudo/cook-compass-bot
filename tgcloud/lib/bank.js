@@ -14,6 +14,22 @@
 import { RECIPE_BANK, BANK_META } from './recipeBank.js';
 
 /* ------------------------------------------------------------------ */
+/* Corpus protein-tag safety pass                                       */
+/* ------------------------------------------------------------------ */
+
+// Names that explicitly declare themselves vegetarian must never carry a
+// meat/fish/chicken protein tag (the book corpus mis-tags a few, e.g.
+// «کباب گیاهی» tagged meat) — otherwise vegetarians lose those dishes and
+// worst-case get them filtered into «veg» pools of the weekly plan.
+const VEG_NAME_RE = /گیاهی|وگان|بدون ?گوشت/;
+for (const r of RECIPE_BANK) {
+  if (VEG_NAME_RE.test(r.n) && Array.isArray(r.p) && r.p.length) {
+    r.p = r.p.filter((t) => t !== 'meat' && t !== 'fish' && t !== 'chicken');
+    if (!r.p.includes('veg')) r.p.push('veg');
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Normalization                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -44,10 +60,27 @@ const DIET_BLOCKERS = {
   no_dairy: ['dairy'],
 };
 
+// Name-based protein detection (tested against the tight form: no spaces/ZWNJ).
+// Deliberately conservative: کباب/فیله are ambiguous (کباب گیاهی، فیله ماهی)
+// and stay out of the meat net — the corpus p-tags carry those cases.
+const MEAT_NAME_RE = /گوشت|قورمه|قیمه|بره|گوسفند|گوساله|استیک|جگر|جگروز|سوسیس|کالباس|ژامبون|دنبی/;
+const CHICKEN_NAME_RE = /مرغ|جوجه|بوقلمون|اردک|کبک|بلدرچین|بال/;
+const FISH_NAME_RE = /ماهی|میگو|قزل|سالمون|تن‌ماهی|تنماهی/;
+
 /** Diet + free-text avoid-foods check against a bank record. */
 export function bankAllows(r, { diet = 'none', avoidFoods = [] } = {}) {
   const blocked = DIET_BLOCKERS[diet] ?? [];
-  for (const t of blocked) if ((r.p ?? []).includes(t)) return false;
+  // Name-level safety net: a handful of corpus records carry a protein tag
+  // that contradicts the dish name («بال با طعم پنیر بلوچیز» tagged veg).
+  // The diet check consults BOTH the tag and the name, so a mis-tag can
+  // never serve meat/chicken/fish to a restricted user.
+  const nameHay = tight(r.n);
+  for (const t of blocked) {
+    if ((r.p ?? []).includes(t)) return false;
+    if (t === 'meat' && MEAT_NAME_RE.test(nameHay)) return false;
+    if (t === 'chicken' && CHICKEN_NAME_RE.test(nameHay)) return false;
+    if (t === 'fish' && FISH_NAME_RE.test(nameHay)) return false;
+  }
   if (avoidFoods?.length) {
     const hay = [r.n, ...(r.i ?? []).map((i) => i[0])].join(' | ');
     for (const a of avoidFoods) {
@@ -153,6 +186,60 @@ export function bankRandom({ diet = 'none', avoidFoods = [], exclude = [], avoid
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/* ------------------------------------------------------------------ */
+/* Category browse — «🍽 دسته‌بندی غذاها»                                 */
+/* ------------------------------------------------------------------ */
+
+/** Canonical display order of the bank's food-type categories: mains first,
+ *  then light/appetizer, then sweet/bakery/drinks. The array index is the
+ *  stable callback id (`cat:<idx>`), so never reorder without a migration. */
+export const BANK_CATS = [
+  'خورشت', 'پلو و چلو', 'کباب', 'آش و سوپ',
+  'خوراک مرغ', 'خوراک گوشت', 'ماهی و میگو',
+  'کوکو و املت', 'کتلت و شامی', 'دلمه و کوفته',
+  'ماکارونی و پاستا', 'غذای گیاهی', 'غذای سریع',
+  'غذای ملل', 'غذای محلی', 'غذای رژیمی', 'غذای کودک',
+  'سالاد', 'پیش‌غذا و بورانی',
+  'دسر و شیرینی', 'نان و خمیر', 'مربا و ترشی', 'نوشیدنی',
+];
+
+const CAT_EMOJI = {
+  'خورشت': '🍲', 'پلو و چلو': '🍚', 'کباب': '🍢', 'آش و سوپ': '🥣',
+  'خوراک مرغ': '🍗', 'خوراک گوشت': '🥩', 'ماهی و میگو': '🐟',
+  'کوکو و املت': '🍳', 'کتلت و شامی': '🥙', 'دلمه و کوفته': '🧆',
+  'ماکارونی و پاستا': '🍝', 'غذای گیاهی': '🥦', 'غذای سریع': '⚡',
+  'غذای ملل': '🌍', 'غذای محلی': '🗺', 'غذای رژیمی': '🥬', 'غذای کودک': '🍼',
+  'سالاد': '🥗', 'پیش‌غذا و بورانی': '🥒',
+  'دسر و شیرینی': '🍰', 'نان و خمیر': '🍞', 'مربا و ترشی': '🍯', 'نوشیدنی': '🥤',
+};
+
+export function catEmoji(cat) {
+  return CAT_EMOJI[cat] ?? '🍽';
+}
+
+/** [{ cat, emoji, count }] in BANK_CATS order (unknown categories from the
+ *  corpus are appended so nothing is ever hidden from the picker). */
+export function bankCatCounts() {
+  const counts = new Map();
+  for (const r of RECIPE_BANK) if (r.c) counts.set(r.c, (counts.get(r.c) ?? 0) + 1);
+  const cats = [...BANK_CATS];
+  for (const c of counts.keys()) if (!cats.includes(c)) cats.push(c);
+  return cats.map((cat) => ({ cat, emoji: catEmoji(cat), count: counts.get(cat) ?? 0 }));
+}
+
+/** Random recipe from one category — diet/avoid-aware, excluding recent
+ *  dishes and names already shown in this browse round. When every recipe
+ *  of a small category has been seen, the full category becomes fair game
+ *  again so the flow never dead-ends. */
+export function bankRandomByCategory(cat, { diet = 'none', avoidFoods = [], exclude = [], avoid = [] } = {}) {
+  const excluded = new Set([...(exclude ?? []), ...(avoid ?? [])].map(tight).filter(Boolean));
+  const base = RECIPE_BANK.filter((r) => r.c === cat && bankAllows(r, { diet, avoidFoods }));
+  if (!base.length) return null;
+  const fresh = base.filter((r) => !excluded.has(tight(r.n)));
+  const pool = fresh.length ? fresh : base;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 /** Fuzzy lookup — exact tight match first, then contains-either-way. */
 export function bankRecipeByName(name) {
   const k = tight(name);
@@ -229,6 +316,7 @@ export function bankRecipe(r, { household = 2 } = {}) {
   if (!r) return null;
   return {
     name: r.n,
+    category: r.c ?? '',
     timeMin: r.t ?? 40,
     difficulty: r.d ?? 'متوسط',
     why: CAT_WHYS[r.c] ?? 'انتخاب‌شده از کتاب‌های آشپزی با توجه به مواد تو',
@@ -283,7 +371,9 @@ export function buildBankPlan({ diet = 'none', avoidFoods = [], exclude = [], ta
   const pools = {
     any: shuffleSeeded(base.filter((r) => !LIGHT_CATS.has(r.c) || t.light > 0)),
     light: shuffleSeeded(base.filter((r) => LIGHT_CATS.has(r.c))),
-    veg: shuffleSeeded(base.filter((r) => !(r.p ?? []).some((p) => MEAL_PROTEINS.includes(p)))),
+    // veg pool also rejects name-visible proteins — mis-tagged corpus
+    // entries (tag says veg, name says مرغ) must never reach a vegetarian.
+    veg: shuffleSeeded(base.filter((r) => !(r.p ?? []).some((p) => MEAL_PROTEINS.includes(p)) && !nameProtein(r.n))),
     meat: shuffleSeeded(base.filter((r) => (r.p ?? []).includes('meat'))),
     fish: shuffleSeeded(base.filter((r) => (r.p ?? []).includes('fish'))),
     chicken: shuffleSeeded(base.filter((r) => (r.p ?? []).includes('chicken'))),
