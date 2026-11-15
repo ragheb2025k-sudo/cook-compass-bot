@@ -8,6 +8,7 @@
 //   rnd | rnd:again | rnd:add
 //   pq:<field>:<n> (weekly-plan questionnaire: meat/fish/chicken/light 0..4)
 //   pl:simple | pl:batch | pl:shop | pl:cook | pl:again
+//   sv | sv:pg:<n> | sv:go:<page>:<slot> | sv:clear | sv:clear:yes (saved archive)
 //   pr | pr:edit:diet | pr:edit:avoid | pr:edit:household | pr:edit:skill | pr:clearhist | pr:clearhist:yes
 //   del:yes | del:no (delete-my-data confirmation)
 //   retry
@@ -18,7 +19,7 @@ export const kb = (rows) => ({ inline_keyboard: rows });
 const btn = (text, callback_data) => ({ text, callback_data });
 const btnUrl = (text, url) => ({ text, url });
 
-export const MENU_ROW = [[btn('🏠 منوی اصلی', 'menu')]];
+export const MENU_ROW = [[btn('📚 دستورهای من', 'sv'), btn('🏠 منوی اصلی', 'menu')]];
 
 export function menuKb() {
   return kb([
@@ -26,6 +27,7 @@ export function menuKb() {
     [btn('🚑 نجات مواد در حال فساد', 'menu:rescue')],
     [btn('📅 برنامه غذایی هفتگی', 'menu:plan')],
     [btn('🎰 گردونه شانس', 'menu:random')],
+    [btn('📚 دستورهای ذخیره‌شده من', 'sv')],
     [btn('⚙️ تنظیمات من', 'menu:profile')],
   ]);
 }

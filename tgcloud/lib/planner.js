@@ -24,6 +24,7 @@ import {
 import { getProfile, savePlan, addHistoryMany, getPlan, getSession, setSession } from './store.js';
 import { planOverview, shoppingListText, recipeCard } from './format.js';
 import { ensureProfile, buildAiContext } from './flows.js';
+import { saveServedRecipes } from './saved.js';
 import { WEEKDAYS_FA, WEEKLY_PLAN } from './config.js';
 import { esc } from './util.js';
 import { buildBankPlan, bankRecipeByName, bankRecipe, buildBankShoppingList, pickCandidates } from './bank.js';
@@ -197,6 +198,9 @@ export async function sendDayRecipes(chatId, dayN, cqId = null) {
     await savePlan(chatId, { ...plan, recipes: recipesMap });
     // Register the day's dishes so the 14-day no-repeat window covers them.
     await addHistoryMany(chatId, [dayRecipes.lunch.name, dayRecipes.dinner.name], 'plan');
+    // 📚 Auto-save the day's recipe cards to the user's permanent archive —
+    // whatever the bot sends stays available via «📚 دستورهای من».
+    await saveServedRecipes(chatId, [dayRecipes.lunch, dayRecipes.dinner], 'plan');
     await sendDayCards(chatId, n, dayRecipes, null, day);
   } catch (e) {
     console.error(`sendDayRecipes day ${n} failed:`, e?.message ?? e);

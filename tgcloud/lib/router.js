@@ -40,6 +40,7 @@ import {
 import { GUARDS } from './config.js';
 import { startOnboarding, editField, handleObCallback, handleOnboardingText } from './onboarding.js';
 import { openFridge, togglePantry, toggleFilter, clearPantry, startSuggest, handlePantryText } from './pantry.js';
+import { cmdSaved, handleSavedCallback } from './saved.js';
 import { decideNext, decidePick, decideAgain, runRescue, startRandom, randomAdd, parseIngredientList, ensureProfile } from './flows.js';
 
 /* ------------------------------------------------------------------ */
@@ -77,6 +78,7 @@ export async function handleMessage(message) {
         case '/rescue': return await cmdRescue(chatId);
         case '/plan': return await openPlanner(chatId);
         case '/random': return await cmdRandomMessage(chatId);
+        case '/recipes': return await cmdSaved(chatId);
         case '/profile': return await cmdProfile(chatId, null);
         case '/privacy': return await sendMessage(chatId, PRIVACY_TEXT, MENU_ROW);
         case '/terms': return await sendMessage(chatId, TERMS_TEXT, MENU_ROW);
@@ -191,6 +193,11 @@ async function routeCallback(chatId, messageId, data, cqId) {
     case 'pq': {
       // Weekly-plan questionnaire — pq:<field>:<n>
       return await handlePqCallback(chatId, messageId, data, cqId);
+    }
+
+    case 'sv': {
+      // 📚 Saved-recipes archive — sv | sv:pg:<n> | sv:go:<page>:<slot> | sv:clear[:yes]
+      return await handleSavedCallback(chatId, messageId, data, cqId);
     }
 
     case 'pl': {

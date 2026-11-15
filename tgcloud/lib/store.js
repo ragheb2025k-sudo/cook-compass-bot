@@ -7,8 +7,8 @@
 
 import { db } from 'sdk';
 import { eq, lt, and, gte, desc } from 'sdk/db';
-import { profiles, sessions, cookingHistory, mealPlans, seenUpdates, rateLimits, aiUsage } from '../schema.js';
-import { SESSION_TTL_MS, HISTORY_DAYS, GUARDS } from './config.js';
+import { profiles, sessions, cookingHistory, mealPlans, savedRecipes, seenUpdates, rateLimits, aiUsage } from '../schema.js';
+import { SESSION_TTL_MS, HISTORY_DAYS, SAVED_RECIPES_CAP, GUARDS } from './config.js';
 
 /* ------------------------------------------------------------------ */
 /* Profiles                                                            */
@@ -105,6 +105,61 @@ export async function clearHistory(tgId) {
 export async function countRecentHistory(tgId, days = HISTORY_DAYS) {
   const dishes = await getRecentDishes(tgId, days);
   return dishes.length;
+}
+
+/* ------------------------------------------------------------------ */
+/* Saved recipes — permanent archive of served recipe cards. Names only;
+/* cards are re-rendered from the bank. No TTL — stays for the user.   */
+/* ------------------------------------------------------------------ */
+
+/** Insert dish names (deduped against the existing archive), oldest
+ *  overflow beyond SAVED_RECIPES_CAP pruned. Order preserved: newest last. */
+export async function addSavedRecipes(tgId, dishes, source = 'decide') {
+  const names = [...new Set((dishes ?? [])
+    .map((d) => String(d ?? '').trim())
+    .filter(Boolean)
+    .slice(0, 10))];
+  if (names.length === 0) return;
+  const existing = await db.select({ dish: savedRecipes.dish })
+    .from(savedRecipes).where(eq(savedRecipes.tgId, tgId)).all();
+  const have = new Set(existing.map((r) => r.dish));
+  const fresh = names.filter((n) => !have.has(n));
+  if (fresh.length === 0) return;
+  await db.insert(savedRecipes)
+    .values(fresh.map((dish) => ({ tgId, dish: dish.slice(0, 160), source })))
+    .run();
+  // Keep the archive bounded — drop the OLDEST rows beyond the cap.
+  if (existing.length + fresh.length > SAVED_RECIPES_CAP) {
+    const overflow = existing.length + fresh.length - SAVED_RECIPES_CAP;
+    const oldest = await db.select({ id: savedRecipes.id })
+      .from(savedRecipes).where(eq(savedRecipes.tgId, tgId))
+      .orderBy(savedRecipes.id).limit(overflow).all();
+    for (const row of oldest) {
+      await db.delete(savedRecipes).where(eq(savedRecipes.id, row.id)).run();
+    }
+  }
+}
+
+/** Saved dishes, newest first — optional offset/limit paging. */
+export async function getSavedRecipes(tgId, { offset = 0, limit = 100 } = {}) {
+  const rows = await db.select({ dish: savedRecipes.dish, source: savedRecipes.source })
+    .from(savedRecipes)
+    .where(eq(savedRecipes.tgId, tgId))
+    .orderBy(desc(savedRecipes.id))
+    .limit(limit)
+    .offset(offset)
+    .all();
+  return rows;
+}
+
+export async function countSavedRecipes(tgId) {
+  const rows = await db.select({ dish: savedRecipes.dish })
+    .from(savedRecipes).where(eq(savedRecipes.tgId, tgId)).all();
+  return rows.length;
+}
+
+export async function clearSavedRecipes(tgId) {
+  await db.delete(savedRecipes).where(eq(savedRecipes.tgId, tgId)).run();
 }
 
 /* ------------------------------------------------------------------ */
@@ -212,6 +267,7 @@ export async function deleteAllUserData(tgId) {
   await db.delete(profiles).where(eq(profiles.tgId, tgId)).run();
   await db.delete(cookingHistory).where(eq(cookingHistory.tgId, tgId)).run();
   await db.delete(mealPlans).where(eq(mealPlans.tgId, tgId)).run();
+  await db.delete(savedRecipes).where(eq(savedRecipes.tgId, tgId)).run();
   await db.delete(rateLimits).where(eq(rateLimits.chatId, tgId)).run();
   await db.delete(aiUsage).where(eq(aiUsage.tgId, tgId)).run();
   await db.delete(seenUpdates).where(eq(seenUpdates.chatId, tgId)).run();

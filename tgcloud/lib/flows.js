@@ -14,6 +14,7 @@ import {
   RECIPE_PARSE_ERROR,
 } from './texts.js';
 import { getProfile, setSession, getSession, addHistory, getRecentDishes, aiQuota } from './store.js';
+import { saveServedRecipes } from './saved.js';
 import { recipeCard } from './format.js';
 import { DIET_OPTIONS, SKILL_OPTIONS, FILTERS, RECIPES_PER_ROUND } from './config.js';
 import { startOnboarding } from './onboarding.js';
@@ -209,6 +210,8 @@ export async function decidePick(chatId, messageId, cqId) {
     timeMin: recipe.timeMin,
     difficulty: recipe.difficulty,
   });
+  // 📚 Auto-save the picked card to the permanent archive («📚 دستورهای من»).
+  await saveServedRecipes(chatId, [recipe], session.source === 'rescue' ? 'rescue' : 'decide');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: null });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
   await editMessageText(chatId, messageId, card, MENU_ROW);
@@ -266,6 +269,9 @@ export async function startRandom(chatId, messageId, cqId = null) {
     const recipe = bankRecipe(r, { household: profile.household });
     const funLine = pickFunLine(recipe.name);
     await setSession(chatId, { flow: 'random', random: { recipe, funLine }, pantry: session.pantry ?? {} });
+    // 📚 Each spin result lands in the permanent archive too — spinning again
+    // replaces the card in chat, so the archive is its only durable copy.
+    await saveServedRecipes(chatId, [recipe], 'random');
     const card = recipeCard(recipe, { household: profile.household });
     await editMessageText(chatId, messageId, `${randomResultHeader(funLine)}\n\n${card}`, randomKb());
   } catch (e) {
@@ -296,6 +302,8 @@ export async function randomAdd(chatId, messageId, cqId) {
   const profile = await getProfile(chatId);
   const { recipe } = session.random;
   await addHistory(chatId, recipe.name, 'random', { timeMin: recipe.timeMin, difficulty: recipe.difficulty });
+  // 📚 Auto-save the committed wheel pick to the permanent archive.
+  await saveServedRecipes(chatId, [recipe], 'random');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
   await editMessageText(chatId, messageId, card, MENU_ROW);

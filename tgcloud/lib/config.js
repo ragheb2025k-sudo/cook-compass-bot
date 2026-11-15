@@ -96,6 +96,11 @@ export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 // "Never repeat a dish cooked in the past 14 days."
 export const HISTORY_DAYS = 14;
 
+// «📚 دستورهای من» — permanent archive of recipes the bot has served the
+// user. No TTL; the cap just bounds storage (oldest dropped beyond it).
+export const SAVED_RECIPES_CAP = 100;
+export const SAVED_PAGE_SIZE = 8;
+
 export const RECIPES_PER_ROUND = 3;
 
 // ---------------------------------------------------------------------------
@@ -168,6 +173,7 @@ export const BOT_COMMANDS = [
   { command: 'rescue',         description: '🚑 نجات مواد در حال فساد' },
   { command: 'plan',           description: '📅 برنامه غذایی هفتگی' },
   { command: 'random',         description: '🎰 گردونه شانس' },
+  { command: 'recipes',        description: '📚 دستورهای ذخیره‌شده من' },
   { command: 'profile',        description: '⚙️ تنظیمات و پروفایل من' },
   { command: 'help',           description: '📖 راهنمای کامل ربات' },
   { command: 'cancel',         description: '✖️ لغو عملیات جاری' },

@@ -61,6 +61,23 @@ export const mealPlans = table('meal_plans', {
 });
 
 // ---------------------------------------------------------------------------
+// Saved recipes — a permanent archive of every recipe card the bot serves
+// (picked suggestions, wheel spins, plan day recipes). Only the bank dish
+// NAME is stored; cards are always re-rendered fresh from lib/recipeBank.js
+// so nothing goes stale and the archive stays tiny. No TTL: entries stay
+// until the user clears them or deletes their account.
+// ---------------------------------------------------------------------------
+export const savedRecipes = table('saved_recipes', {
+  id:      integer('id').primaryKey({ autoIncrement: true }),
+  tgId:    integer('tg_id').notNull(),
+  dish:    text('dish').notNull(),
+  source:  text('source').notNull().default('decide'), // decide | rescue | random | plan
+  savedAt: integer('saved_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+}, (t) => ({
+  byUser: index('idx_saved_user').on(t.tgId, t.savedAt),
+}));
+
+// ---------------------------------------------------------------------------
 // Security & resilience guards (serverless hardening):
 //   seenUpdates — webhook idempotency: message/callback ids already processed,
 //                 so a platform-level redelivery never double-fires a flow
