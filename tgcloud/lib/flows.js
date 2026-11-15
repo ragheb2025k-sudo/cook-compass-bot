@@ -3,7 +3,7 @@
 // "گردونه شانس" randomizer and the «🍽 دسته‌بندی غذاها» category browser.
 // All state round-trips through the sessions table.
 
-import { editMessageText, sendMessage, answerCb } from './telegram.js';
+import { editMessageText, editMessageTextSmart, sendMessage, answerCb } from './telegram.js';
 import { decideKb, decideExhaustedKb, randomKb, catsKb, catKb, MENU_ROW } from './keyboards.js';
 import {
   decideHeader,
@@ -156,7 +156,7 @@ export async function presentSuggestions(chatId, messageId, session, { source = 
     };
     await setSession(chatId, nextSession);
     const card = recipeCard(recipes[0], { household: profile.household });
-    await editMessageText(chatId, messageId, `${decideHeader(1, recipes.length)}\n\n${card}`, decideKb(recipes.length <= 1));
+    await editMessageTextSmart(chatId, messageId, `${decideHeader(1, recipes.length)}\n\n${card}`, decideKb(recipes.length <= 1));
   } catch (e) {
     console.error('presentSuggestions failed:', e?.message ?? e);
     const fallbackSession = {
@@ -192,7 +192,7 @@ export async function decideNext(chatId, messageId, cqId) {
   }
   await setSession(chatId, { ...session, idx, exhausted: false });
   const card = recipeCard(session.recipes[idx], { household: profile?.household });
-  await editMessageText(
+  await editMessageTextSmart(
     chatId,
     messageId,
     `${decideHeader(idx + 1, session.recipes.length)}\n\n${card}`,
@@ -218,7 +218,7 @@ export async function decidePick(chatId, messageId, cqId) {
   await saveServedRecipes(chatId, [recipe], session.source === 'rescue' ? 'rescue' : 'decide');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: null });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
-  await editMessageText(chatId, messageId, card, MENU_ROW);
+  await editMessageTextSmart(chatId, messageId, card, MENU_ROW);
   await answerCb(cqId, 'ثبت شد ✅ نوش جان!');
 }
 
@@ -277,7 +277,7 @@ export async function startRandom(chatId, messageId, cqId = null) {
     // replaces the card in chat, so the archive is its only durable copy.
     await saveServedRecipes(chatId, [recipe], 'random');
     const card = recipeCard(recipe, { household: profile.household });
-    await editMessageText(chatId, messageId, `${randomResultHeader(funLine)}\n\n${card}`, randomKb());
+    await editMessageTextSmart(chatId, messageId, `${randomResultHeader(funLine)}\n\n${card}`, randomKb());
   } catch (e) {
     console.error('startRandom failed:', e?.message ?? e);
     await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: 'random' });
@@ -310,7 +310,7 @@ export async function randomAdd(chatId, messageId, cqId) {
   await saveServedRecipes(chatId, [recipe], 'random');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
-  await editMessageText(chatId, messageId, card, MENU_ROW);
+  await editMessageTextSmart(chatId, messageId, card, MENU_ROW);
   await answerCb(cqId, 'ثبت شد ✅ نوش جان!');
 }
 
@@ -372,7 +372,7 @@ export async function openCategory(chatId, messageId, catIdx, cqId = null) {
     // 📚 Each served card lands in the permanent archive too.
     await saveServedRecipes(chatId, [recipe], 'cat');
     const card = recipeCard(recipe, { household: profile.household });
-    await editMessageText(chatId, messageId, `${catPickHeader(meta.emoji, meta.cat, seen)}\n\n${card}`, catKb());
+    await editMessageTextSmart(chatId, messageId, `${catPickHeader(meta.emoji, meta.cat, seen)}\n\n${card}`, catKb());
   } catch (e) {
     console.error('openCategory failed:', e?.message ?? e);
     await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: `cat:${catIdx}` });
@@ -404,6 +404,6 @@ export async function catAdd(chatId, messageId, cqId) {
   await saveServedRecipes(chatId, [recipe], 'cat');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
-  await editMessageText(chatId, messageId, card, MENU_ROW);
+  await editMessageTextSmart(chatId, messageId, card, MENU_ROW);
   await answerCb(cqId, 'ثبت شد ✅ نوش جان!');
 }

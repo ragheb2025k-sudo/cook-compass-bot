@@ -5,6 +5,46 @@
 import { BOT, WEEKDAYS_FA } from './config.js';
 import { esc, fa, timeLabel } from './util.js';
 
+/**
+ * Split an HTML text (a full recipe card with complete — longer — steps)
+ * into parts that each stay under Telegram's 4096-char limit. Splitting
+ * happens only at line boundaries, so no <b>…</b> tag is ever cut in half.
+ * Continuation parts get a small «ادامهٔ دستور» marker; the caller keeps
+ * its inline keyboard only on the LAST part.
+ */
+export function splitLongText(text, maxLen = 3900) {
+  const t = String(text ?? '');
+  if (t.length <= maxLen) return [t];
+  const lines = t.split('\n');
+  const parts = [];
+  let current = [];
+  let size = 0;
+  for (const line of lines) {
+    if (line.length > maxLen) {
+      // pathological single line (never happens with recipe cards) — hard split
+      if (current.length) {
+        parts.push(current.join('\n'));
+        current = [];
+        size = 0;
+      }
+      for (let i = 0; i < line.length; i += maxLen) parts.push(line.slice(i, i + maxLen));
+      continue;
+    }
+    if (current.length && size + line.length + 1 > maxLen) {
+      parts.push(current.join('\n'));
+      current = [];
+      size = 0;
+    }
+    current.push(line);
+    size += line.length + 1;
+  }
+  if (current.length) parts.push(current.join('\n'));
+  if (parts.length <= 1) return parts;
+  return parts.map((p, i) =>
+    i === 0 ? p : `📄 <i>ادامهٔ دستور — بخش ${fa(i + 1)} از ${fa(parts.length)}</i>\n\n${p}`,
+  );
+}
+
 function footer() {
   return `🧭 ${esc(BOT.name)} | ${esc(BOT.username)}`;
 }

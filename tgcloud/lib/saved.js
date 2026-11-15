@@ -14,7 +14,7 @@
 //   sv:clear           — ask for confirmation
 //   sv:clear:yes       — wipe the archive (manual only; no auto-cleanup)
 
-import { sendMessage, editMessageText, answerCb } from './telegram.js';
+import { sendMessage, sendMessageSmart, editMessageText, answerCb } from './telegram.js';
 import { kb, MENU_ROW } from './keyboards.js';
 import {
   addSavedRecipes,
@@ -134,7 +134,7 @@ async function openSavedRecipe(chatId, page, slot, cqId) {
     household: profile?.household,
   });
   await answerCb(cqId);
-  await sendMessage(chatId, card, MENU_ROW);
+  await sendMessageSmart(chatId, card, MENU_ROW);
 }
 
 function truncate(s, n) {

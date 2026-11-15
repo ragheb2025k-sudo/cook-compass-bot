@@ -6,6 +6,7 @@
 import { api, BotApiError } from 'sdk';
 import { BOT_COMMANDS } from './config.js';
 import { sleep } from './util.js';
+import { splitLongText } from './format.js';
 
 const NO_PREVIEW = { link_preview_options: { is_disabled: true } };
 
@@ -108,6 +109,34 @@ export async function answerCb(callbackId, text = null, showAlert = false) {
 /** best-effort error notice to the user when a flow blows up. */
 export async function sendError(chatId) {
   await sendMessage(chatId, ERROR_TEXT, RETRY_KB);
+}
+
+/* ------------------------------------------------------------------ */
+/* Long-message helpers — full recipe cards with complete steps often   */
+/* exceed Telegram's 4096-char limit. These split the text at line      */
+/* boundaries («ادامهٔ دستور» markers on continuations) and keep the     */
+/* inline keyboard only on the last part.                              */
+/* ------------------------------------------------------------------ */
+
+/** Edit `messageId` with part 1, then send the remaining parts as new messages. */
+export async function editMessageTextSmart(chatId, messageId, text, inlineKeyboard = null) {
+  const parts = splitLongText(text);
+  const last = parts.length - 1;
+  await editMessageText(chatId, messageId, parts[0], parts.length > 1 ? null : inlineKeyboard);
+  for (let i = 1; i < parts.length; i++) {
+    await sendMessage(chatId, parts[i], i === last ? inlineKeyboard : null);
+  }
+  return parts.length;
+}
+
+/** Send any text, auto-split into as many messages as needed. */
+export async function sendMessageSmart(chatId, text, inlineKeyboard = null) {
+  const parts = splitLongText(text);
+  const last = parts.length - 1;
+  for (let i = 0; i < parts.length; i++) {
+    await sendMessage(chatId, parts[i], i === last ? inlineKeyboard : null);
+  }
+  return parts.length;
 }
 
 /** setMyCommands — registers the "/" quick-access command menu (default scope,

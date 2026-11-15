@@ -2,14 +2,27 @@
 # tools/build-bank.py — builds tgcloud/lib/recipeBank.js from the extracted
 # cooking sources:
 #   1) tools/book-seed.json            (hand-encoded recipes from the uploaded PDF books)
-#   2) /tmp/papoon-dec/b*.json         (سرآشپز پاپیون APK — 2,552 decoded recipes)
-# Output: a single compact JS data module + a stats report.
+#   2) tools/papoon-dec/b*.json        (سرآشپز پاپیون APK — decoded tables, FULL text)
+#
+# v2 (this revision) fixes three data-quality problems of v1:
+#   * v1 hard-truncated every step to 150 chars (60% of recipes arrived with
+#     mid-sentence chopped instructions). Steps are now kept in full: split on
+#     the app's 'nnn' separator, long single paragraphs broken at sentence
+#     ends, up to 8 steps, no truncation.
+#   * v1 estimated cook time from a per-category constant. The app's own
+#     prep (l) + cook (m) minutes are now used whenever present.
+#   * v1 mapped the papoon category «پای وگراتن» wholesale to «ماکارونی و
+#     پاستا», so dessert pies (پای ریواس) surfaced under pasta. Verified via
+#     web search: sweet pies/tarts are شیرینی; savory Western pies, tarts,
+#     quiches (کیش), gratins and soufflés are French/Western cuisine →
+#     «غذای ملل». Also: «سایر» finger-foods get explicit rules instead of a
+#     protein-tag fallback.
 #
 # Run:  python3 tools/build-bank.py
-import json, re, glob, os
+import json, re, os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEC = '/tmp/papoon-dec'
+DEC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'papoon-dec')
 OUT = os.path.join(ROOT, 'tgcloud', 'lib', 'recipeBank.js')
 
 FA = str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹')
@@ -26,7 +39,7 @@ CAT_MAP = {
     'گوشت قرمز': 'خوراک گوشت', 'استیک': 'خوراک گوشت',
     'ماهی و میگو': 'ماهی و میگو',
     'سبزیجات': 'غذای گیاهی', 'حبوبات': 'غذای گیاهی', 'میوه و سبزی': 'غذای گیاهی',
-    'ماکارونی': 'ماکارونی و پاستا', 'لازانیا و سوفله': 'ماکارونی و پاستا', 'پای وگراتن': 'ماکارونی و پاستا',
+    'ماکارونی': 'ماکارونی و پاستا', 'لازانیا و سوفله': 'ماکارونی و پاستا',
     'پیتزا': 'غذای سریع', 'ساندویچ': 'غذای سریع', 'فست فود': 'غذای سریع', 'اسنک و رول': 'غذای سریع',
     'غذای دانشجویی': 'غذای سریع',
     'سالاد': 'سالاد', 'انواع سالاد': 'سالاد',
@@ -55,6 +68,15 @@ CAT_MAP = {
 EXCLUDED_CATS = {'نکات آشپزی', 'اصطلاحات', 'مقیاس های اندازه گیری', 'تزئینات', 'چاشنی وادویه',
                  'سس ورب', 'پختن', 'مناسبت ها', 'تنقلات', 'کوکی'}
 
+# Sweet pies/tarts (desserts) — verified: تارت/پای ریواس، پای سیب و… are شیرینی.
+SWEET_PIE_RE = re.compile(
+    r'ریواس|سیب(?= ?(پای|تارت|لوکس|کارامل|شکری))|پای سیب|تارت سیب|گیلاس|آلبالو|بلوبری|توت فرنگی|توت‌فرنگی|'
+    r'زرد ?آلو|گلابی|انگور|انار|پرتقال|موز|لیمو|شکلات|کارامل|کدو ?حلوایی|گردو|مرنگ|مارمالاد|'
+    r'میوه|افرا|کردو|به |پای لقمه|پیراشکی سیب|مینی پای')
+# Savory Western pies / tarts / quiches / gratins / soufflés → French cuisine.
+SAVORY_PIE_RE = re.compile(
+    r'پای|تارت|کیش|گراتن|گراتین|سوفله|پاستی|تاکو|کالزونه|پیراشکی|سوسیس پیچ|پیراف|پاگاش')
+
 NAME_RULES = [
     (re.compile(r'پلو|چلو|کته|ته ?چین|بریانی'), 'پلو و چلو'),
     (re.compile(r'خورش'), 'خورشت'),
@@ -64,14 +86,18 @@ NAME_RULES = [
     (re.compile(r'کتلت|شامی'), 'کتلت و شامی'),
     (re.compile(r'کوفته|دلمه'), 'دلمه و کوفته'),
     (re.compile(r'کباب'), 'کباب'),
-    (re.compile(r'ماکارونی|پاستا|لازانیا|اسپاگتی'), 'ماکارونی و پاستا'),
+    (re.compile(r'ماکارونی|پاستا|لازانیا|اسپاگتی|نودل|پنه|فارفاله|تورتلینی|راویولی|فتوچینی|تالیاتلی'), 'ماکارونی و پاستا'),
     (re.compile(r'پیتزا'), 'غذای سریع'),
-    (re.compile(r'ساندویچ|برگر|هات داگ|اسنک|رول'), 'غذای سریع'),
+    (re.compile(r'ساندویچ|برگر|هات داگ|اسنک|رول|سمبوسه|ترتیلا|ترتیلای|بورک|پیتا'), 'غذای سریع'),
     (re.compile(r'ماهی|میگو|تن ?ماهی|قزل|سالمون'), 'ماهی و میگو'),
     (re.compile(r'مرغ|جوجه|بوقلمون|اردک|کبک'), 'خوراک مرغ'),
-    (re.compile(r'کیک|شیرینی|دسر|بستنی|ژله|موس|فرنی|حلوا|شله|مربا|ترشی|نوشیدنی|شربت|اسموتی|چای|قهوه'), 'دسر و شیرینی'),
+    (re.compile(r'کیک|شیرینی|دسر|بستنی|ژله|موس|فرنی|حلوا|شله|مربا|ترشی|نوشیدنی|شربت|اسموتی|چای|قهوه|لیموناد|کوکتل|معجون'), 'دسر و شیرینی'),
     (re.compile(r'بورانی|پوره'), 'پیش‌غذا و بورانی'),
     (re.compile(r'نان'), 'نان و خمیر'),
+    # «سایر» finger foods — explicit homes instead of the protein fallback.
+    (re.compile(r'بروسکتا|بروشت|کاناپه|کراستینی|ترین|کاپ '), 'پیش‌غذا و بورانی'),
+    (re.compile(r'سیب ?زمینی|بلال|باراواس'), 'غذای سریع'),
+    (re.compile(r'زیتون پرورده'), 'مربا و ترشی'),
 ]
 
 TIME_BY_CAT = {
@@ -88,6 +114,9 @@ CHICKEN_RE = re.compile(r'مرغ|جوجه|بوقلمون|اردک|کبک|ژام�
 MEAT_RE = re.compile(r'گوشت|قیمه|قورمه|کباب|استیک|فیله|بره|گوسفند|گوساله|تخمه? مغز|مغز گوس')
 DAIRY_RE = re.compile(r'شیر |ماست|پنیر|خامه|کشک|کره|یخ مایه|مارگارین')
 EGG_RE = re.compile(r'تخم ?مرغ')
+
+MAX_STEPS = 8
+STEP_SOFT_CAP = 420  # single steps longer than this get split at sentence ends
 
 def norm_name(s):
     s = (s or '').replace('\ufeff', '').strip()
@@ -116,22 +145,34 @@ def fmt_qty(qty, unit):
     txt = f"{fa_digits(qty)} {unit_fa}".strip()
     return txt if txt else 'به مقدار لازم'
 
+def split_sentences(text):
+    # split Persian prose at sentence ends; keep decimal dots intact
+    parts = re.split(r'(?<=[.!؟؛])\s+|(?<=[.؟؛])\s*(?=[A-Zآ-ی])', text)
+    return [p.strip() for p in parts if p.strip()]
+
 def split_steps(method):
+    """Full-fidelity step splitting — replaces v1's 150-char truncation."""
     raw = (method or '').replace('\r', '')
     parts = [p.strip() for p in re.split(r'nnn|\n{2,}|\r', raw) if p.strip()]
     parts = [re.sub(r'\s+', ' ', p) for p in parts]
-    if (len(parts) == 1 and len(parts[0]) > 240):
-        # break a single long paragraph at sentence ends
-        chunks, cur = [], ''
-        for seg in re.split(r'(?<=[.،؛!])\s+', parts[0]):
-            if len(cur) + len(seg) > 180 and cur:
-                chunks.append(cur.strip()); cur = seg
+    out = []
+    for p in parts:
+        if len(p) <= STEP_SOFT_CAP:
+            out.append(p)
+            continue
+        # long paragraph → sentence-grouped chunks of ~220 chars
+        cur = ''
+        for sent in split_sentences(p):
+            if cur and len(cur) + len(sent) + 1 > 260:
+                out.append(cur.strip())
+                cur = sent
             else:
-                cur = (cur + ' ' + seg).strip()
-            if len(chunks) >= 2: break
-        if cur and len(chunks) < 3: chunks.append(cur.strip())
-        parts = [c for c in chunks if c]
-    return [p[:150] for p in parts[:3]]
+                cur = (cur + ' ' + sent).strip()
+            if len(out) >= MAX_STEPS:
+                break
+        if cur and len(out) < MAX_STEPS:
+            out.append(cur.strip())
+    return out[:MAX_STEPS]
 
 def classify(name, ing_names):
     text = name + ' ' + ' '.join(ing_names)
@@ -146,20 +187,31 @@ def classify(name, ing_names):
     return sorted(tags)
 
 def guess_cat(name, papoon_cat):
+    # 1) papoon's own category, with the two Western-baked corrections
     if papoon_cat:
+        if papoon_cat == 'پای وگراتن':
+            return 'دسر و شیرینی' if SWEET_PIE_RE.search(name) else 'غذای ملل'
+        if papoon_cat == 'لازانیا و سوفله' and re.search(r'سوفله', name):
+            return 'غذای ملل'
         mapped = CAT_MAP.get(papoon_cat, 'NOPE')
         if mapped and mapped != 'NOPE': return mapped
+    # 2) name-based rules
     for rx, cat in NAME_RULES:
         if rx.search(name): return cat
-    # fallback by protein tag later
+    # 3) protein fallback
     return None
 
-def time_for(cat, n_steps, n_ings):
-    t = TIME_BY_CAT.get(cat, 45)
-    return max(10, min(240, t))
+def time_for(cat, l, m):
+    try:
+        total = int(float(l or 0)) + int(float(m or 0))
+    except (ValueError, TypeError):
+        total = 0
+    if total <= 0:
+        total = TIME_BY_CAT.get(cat, 45)
+    return max(10, min(240, total))
 
 # ---------------- load book seed ----------------
-seed = json.load(open(os.path.join(os.path.dirname(__file__), 'book-seed.json'), encoding='utf-8'))
+seed = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'book-seed.json'), encoding='utf-8'))
 bank, seen = [], set()
 stats = {'book': 0, 'papoon': 0, 'papoon_skipped': 0}
 
@@ -228,8 +280,14 @@ for r in recipes_rows:
     tags = classify(name, [a for a, _ in ings])
     if cat is None:
         cat = {'fish': 'ماهی و میگو', 'chicken': 'خوراک مرغ', 'meat': 'خوراک گوشت'}.get(tags[0], 'غذای گیاهی')
-    bank.append({'n': name, 'c': cat, 'p': tags, 't': time_for(cat, len(steps), len(ings)),
-                 'd': 'آسان' if cat in EASY_CATS else 'متوسط', 'i': ings, 's': steps})
+    rec = {'n': name, 'c': cat, 'p': tags,
+           't': time_for(cat, r.get('l'), r.get('m')),
+           'd': 'آسان' if cat in EASY_CATS else 'متوسط', 'i': ings, 's': steps}
+    # chef tip from the app's note field (skip cross-reference stubs & sources)
+    note = re.sub(r'\s+', ' ', (r.get('f') or '').replace('\ufeff', '')).strip()
+    if 12 <= len(note) <= 200 and not note.startswith(('منبع', 'برگرفته', 'منبع:', 'نقل')):
+        rec['tip'] = note[:200]
+    bank.append(rec)
     stats['papoon'] += 1
 
 # ---------------- finalize ----------------
@@ -278,8 +336,9 @@ agg = f"""// tgcloud/lib/recipeBank.js — GENERATED AGGREGATOR (do not hand-edi
 // Query helpers live in lib/bank.js.
 //
 // Record shape (compact):
-//   n  name · c category · p protein/diet tags · t timeMin · d difficulty
-//   i  [[ingredient, qty]…] · s steps · tip chef tip
+//   n  name · c category · p protein/diet tags · t timeMin (app prep+cook or
+//      category estimate) · d difficulty · i [[ingredient, qty]…] ·
+//   s  full steps (no truncation) · tip chef tip from the source
 {imports}
 
 export const RECIPE_BANK = [{concat}];

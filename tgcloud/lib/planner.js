@@ -10,7 +10,7 @@
 // double-portion bases. Hard rules (max one rice meal per day, no dish
 // repeated, protein quotas) are enforced in lib/ai.js.
 
-import { editMessageText, sendMessage, answerCb } from './telegram.js';
+import { editMessageText, editMessageTextSmart, sendMessageSmart, sendMessage, answerCb } from './telegram.js';
 import { planModeKb, planQKb, planKb, MENU_ROW } from './keyboards.js';
 import {
   PLAN_Q_INTRO,
@@ -234,12 +234,25 @@ async function sendDayCards(chatId, n, dayRecipes, loadingMessageId = null, plan
     household: profile?.household,
     headerNote: dinnerNote,
   });
-  const text = `${dayRecipesHeader(n)}\n\n${lunchCard}\n\n${dinnerCard}`;
-  if (loadingMessageId) {
-    await editMessageText(chatId, loadingMessageId, text, MENU_ROW);
-  } else {
-    await sendMessage(chatId, text, MENU_ROW);
+  const lunchText = `${dayRecipesHeader(n)}\n\n${lunchCard}`;
+  // With full (untruncated) steps the two cards together often exceed
+  // Telegram's 4096-char limit — split lunch and dinner into separate
+  // messages, each one further auto-split via the smart senders.
+  if (lunchText.length + dinnerCard.length <= 3900) {
+    const text = `${lunchText}\n\n${dinnerCard}`;
+    if (loadingMessageId) {
+      await editMessageText(chatId, loadingMessageId, text, MENU_ROW);
+    } else {
+      await sendMessage(chatId, text, MENU_ROW);
+    }
+    return;
   }
+  if (loadingMessageId) {
+    await editMessageTextSmart(chatId, loadingMessageId, lunchText, null);
+  } else {
+    await sendMessageSmart(chatId, lunchText, null);
+  }
+  await sendMessageSmart(chatId, dinnerCard, MENU_ROW);
 }
 
 /** Re-send the categorized shopping list — data "pl:shop".
