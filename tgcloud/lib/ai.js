@@ -19,6 +19,7 @@ import { fetch } from 'sdk';
 import { AI } from './config.js';
 import { clampInt } from './util.js';
 import { mockChatReply } from './mock.js';
+import { pickCandidates, bankCatalog, bankRecipeByName } from './bank.js';
 
 export class AiError extends Error {}
 
@@ -175,6 +176,7 @@ const RECIPES_SPEC = JSON.stringify({
 
 const CHEF_SYSTEM = [
   'تو «سرآشپزِ قطب‌نمای آشپزی» هستی؛ یک سرآشپز و مشاور غذای ایرانی، خلاق، عمل‌گرا و خوش‌ذوق.',
+  'دانش دستورپخت تو بر پایهٔ «بانک دستورها» است: مجموعهٔ کامل دستورهای پخت از کتاب‌ها و اپ‌های آموزش آشپزی (سرآشپز پاپیون، کتاب الکترونیکی آشپزی، آشپزی غذاهای بدون گوشت و آموزش آشپزی ایرانی) که در همین پیام فهرست شده‌اند.',
   'همیشه غذاهای واقع‌بینانه و در دسترسِ آشپزخانه ایرانی پیشنهاد می‌دهی؛ مواد را دقیق و بر حسب گرم/لیوان/قاشق برای تعداد نفراتِ کاربر حساب می‌کنی.',
   'مراحل پخت کوتاه، شماره‌گذاری‌شده، بدون حاشیه و کاملاً کاربردی هستند.',
   'قوانین قطعی خروجی:',
@@ -211,7 +213,31 @@ function recipesUserPrompt(ctx, count) {
   const lines = ['یک درخواست پیشنهاد غذا با مشخصات زیر:'];
   lines.push(...baseContextLines(ctx));
   if (!ctx.items?.length && !ctx.rescue?.length) {
-    lines.push('- مواد موجود مشخص نشده؛ با مواد معمول و همیشگی آشپزخانه ایرانی پیشنهاد بده');
+    lines.push('- مواد موجود مشخص نشده؛ از بانک دستورهای کتاب‌ها گزینه‌های متنوع پیشنهاد بده');
+  }
+  lines.push('');
+  // 📚 Book-bank candidates — the AI must pick its dishes from this list so
+  // every suggestion traces back to a real recipe from the uploaded books.
+  const candidates = pickCandidates({
+    diet: ctx.dietKey ?? 'none',
+    avoidFoods: ctx.avoidFoods,
+    items: ctx.items,
+    rescue: ctx.rescue,
+    filters: ctx.filterKeys,
+    exclude: ctx.exclude,
+    avoid: ctx.avoid,
+    count: 9,
+    mealOnly: true,
+    minScore: 0,
+  });
+  if (candidates.length) {
+    lines.push('📚 «بانک دستورها» — کاندیدهای منطبق با مواد و فیلترهای کاربر (فقط از همین‌ها انتخاب کن):');
+    for (const r of candidates) {
+      lines.push(`* «${r.n}» (${r.c}) — مواد: ${(r.i ?? []).map(([n, q]) => `${n} ${q}`).join('، ')}`);
+    }
+    lines.push('قاعده انتخاب: فقط نام‌های همین فهرست را پیشنهاد بده؛ مواد لازم را عیناً از همین دستورها بیاور و مقادیر را برای تعداد نفرات مقیاس کن؛ مراحل پخت را از همین دستورها بگیر ولی خلاصه و شماره‌گذاری‌شده بنویس.');
+  } else {
+    lines.push('📚 بانک دستورها برای این فیلترها نتیجه‌ای نداد؛ با مواد معمول آشپزخانه ایرانی پیشنهاد بده.');
   }
   lines.push('');
   lines.push(`دستور پخت‌ها باید کاملاً متفاوت و از ${count} دسته یا سبک مختلف باشند.`);
@@ -225,6 +251,26 @@ function randomUserPrompt(ctx) {
   const lines = ['یک درخواست «گردونه شانس» با مشخصات زیر:'];
   lines.push(...baseContextLines(ctx));
   lines.push('- یک غذا فقط؛ قطعی و متفاوت از همیشه، کمی خلاقانه ولی کاملاً عمل‌پذیر');
+  lines.push('');
+  // 📚 Book-bank candidates for the wheel.
+  const candidates = pickCandidates({
+    diet: ctx.dietKey ?? 'none',
+    avoidFoods: ctx.avoidFoods,
+    items: ctx.items,
+    filters: ctx.filterKeys,
+    exclude: ctx.exclude,
+    avoid: ctx.avoid,
+    count: 5,
+    mealOnly: false,
+    minScore: 0,
+  });
+  if (candidates.length) {
+    lines.push('📚 «بانک دستورها» — یکی از این‌ها را قطعاً انتخاب کن (گردونه):');
+    for (const r of candidates) {
+      lines.push(`* «${r.n}» (${r.c}) — مواد: ${(r.i ?? []).map(([n, q]) => `${n} ${q}`).join('، ')}`);
+    }
+    lines.push('مواد لازم را عیناً از همین دستور بیاور و مقادیر را برای تعداد نفرات مقیاس کن؛ مراحل را خلاصه و شماره‌گذاری‌شده بنویس.');
+  }
   lines.push('');
   lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار:');
   lines.push(JSON.stringify({
@@ -255,6 +301,12 @@ function planUserPrompt(ctx, mode) {
   lines.push('- 💰 اقتصادی بودن: گوشت قرمز و ماهی فقط تا سقف سهمیه کاربر؛ بقیه هفته با پروتئین‌های ارزان و گیاهی');
   lines.push('- برنامه: ۷ روز، هر روز ناهار و شام (فقط نام غذاها + جایگزین‌ها، نه دستور کامل)');
   lines.push('- تنوع داشته باشد؛ خوراک‌های تکراری یا شبیه هم نباشد');
+  // 📚 Book-bank catalog — the week must be composed from book dishes.
+  const catalog = bankCatalog({ diet: ctx.dietKey ?? 'none', avoidFoods: ctx.avoidFoods, maxPerCat: 14, maxDishes: 220 });
+  if (catalog.length) {
+    lines.push('📚 «بانک دستورها» — نام‌های مجاز برای وعده‌ها و جایگزین‌ها (فقط از همین نام‌ها استفاده کن):');
+    lines.push(catalog.join('\n'));
+  }
   if (mode === 'batch') {
     lines.push('- حالت «پخت و فریز»: حداقل ۲ پایه مشترک تعریف کن؛ پایه را با پورت دوبرابر در یک روز بپز و ۲ روز بعد در غذای کاملاً متفاوتی از آن استفاده کن (مثلاً مایه ماکارونی یا مرغ ریش‌ریش). اینها را در batch_notes به فارسی توضیح بده');
   } else {
@@ -278,6 +330,9 @@ function buildCtx(ctx) {
   return {
     household: ctx.household ?? 2,
     dietPrompt: ctx.dietPrompt ?? 'بدون محدودیت',
+    // raw keys — drive bank filtering (diet rules + situational filter scores)
+    dietKey: ctx.dietKey ?? 'none',
+    filterKeys: (ctx.filterKeys ?? []).map(String),
     skillPrompt: ctx.skillPrompt ?? 'ساده',
     avoidFoods: (ctx.avoidFoods ?? []).map(String),
     items: (ctx.items ?? []).map(String),
@@ -495,6 +550,15 @@ export async function generateDayRecipes(ctx, plan, dayN) {
   lines.push(`- 🌙 شام: دقیقاً با نام «${day.dinner}»`);
   if (day.dinnerLight) lines.push('- 🥗 شام این روز «سبک» است: دستور را سبک، کم‌چرب و کم‌حجم بچین (بدون برنج و غذای سنگین)');
   if (RICE_DISH_RE.test(day.lunch)) lines.push('- ناهار این روز برنجی است؛ در مواد لازم همین غذا بمان و برای شام برنج نپز');
+  // 📚 Book-bank hint — if the planned dish exists in the corpus, hand the AI
+  // its exact ingredient list so the card matches the book recipe.
+  for (const [slot, dishName] of [['lunch', day.lunch], ['dinner', day.dinner]]) {
+    const r = bankRecipeByName(dishName);
+    if (r) {
+      lines.push(`📚 دستور کتابی «${r.n}» (${r.c}) برای ${slot === 'lunch' ? 'ناهار' : 'شام'} — مواد لازم را عیناً از این فهرست بیاور و برای تعداد نفرات مقیاس کن؛ مراحل را از همین دستور خلاصه کن:`);
+      lines.push(`  مواد: ${(r.i ?? []).map(([n, q]) => `${n} ${q}`).join('، ')}`);
+    }
+  }
   lines.push('');
   lines.push('خروجی: دقیقاً یک شیء JSON با همین ساختار و همین کلیدها:');
   lines.push(JSON.stringify({

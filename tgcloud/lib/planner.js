@@ -15,21 +15,18 @@ import { planModeKb, planQKb, planKb, MENU_ROW } from './keyboards.js';
 import {
   PLAN_Q_INTRO,
   PLAN_MODE_QUESTION,
-  PLAN_LOADING,
   planIntro,
   planQQuestion,
-  AI_QUOTA_ALERT,
   SHOPPING_LIST_HEADER,
   RECIPE_PARSE_ERROR,
-  dayLoading,
   dayRecipesHeader,
 } from './texts.js';
-import { getProfile, savePlan, addHistoryMany, getPlan, getSession, setSession, aiQuota } from './store.js';
-import { generatePlan, generateDayRecipes, generateShoppingList } from './ai.js';
+import { getProfile, savePlan, addHistoryMany, getPlan, getSession, setSession } from './store.js';
 import { planOverview, shoppingListText, recipeCard } from './format.js';
 import { ensureProfile, buildAiContext } from './flows.js';
 import { WEEKDAYS_FA, WEEKLY_PLAN } from './config.js';
 import { esc } from './util.js';
+import { buildBankPlan, bankRecipeByName, bankRecipe, buildBankShoppingList, pickCandidates } from './bank.js';
 
 /* ------------------------------------------------------------------ */
 /* Questionnaire plumbing                                              */
@@ -110,7 +107,7 @@ export async function handlePqCallback(chatId, messageId, data, cqId) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Phase 1 — generate the 7-day skeleton + shopping list               */
+/* Phase 1 — compose the 7-day plan from the book bank                 */
 /* ------------------------------------------------------------------ */
 
 export async function startPlan(chatId, messageId, mode, cqId = null) {
@@ -125,20 +122,22 @@ export async function startPlan(chatId, messageId, mode, cqId = null) {
     return;
   }
   if (cqId) await answerCb(cqId);
-  // AI wallet guard (Gate 4.1.3) — per-user daily quota.
-  const quota = await aiQuota(chatId);
-  if (!quota.allowed) {
-    await editMessageText(chatId, messageId, AI_QUOTA_ALERT, MENU_ROW);
-    return;
-  }
-  await editMessageText(chatId, messageId, PLAN_LOADING, [
-    [{ text: '🔄 تلاش دوباره', callback_data: `retry:plan:${mode}` }],
-    [{ text: '🏠 منوی اصلی', callback_data: 'menu' }],
-  ]);
+  // 📚 Bank-first planning: the 7-day plan is composed deterministically from
+  // the book corpus (2,400+ recipes) honoring the questionnaire quotas, the
+  // one-rice-meal rule and the 14-day no-repeat history. The AI provider's
+  // free tier (1 reply / 45s per IP, ~30s latency) used to dead-end this flow
+  // mid-invocation — it is no longer on the hot path.
   try {
     const ctx = await buildAiContext(chatId, profile, session, {});
-    const plan = await generatePlan(ctx, mode);
-    console.info('[ai plan]', plan.days.map((d) => `${d.n}☀️${d.lunch}/🌙${d.dinner}${d.dinnerLight ? '(سبک)' : ''}`).join(' | '));
+    const plan = buildBankPlan({
+      diet: ctx.dietKey,
+      avoidFoods: ctx.avoidFoods,
+      exclude: ctx.exclude,
+      targets: ctx.weeklyTargets,
+      mode,
+    });
+    if (!plan || plan.days?.length !== 7) throw new Error('bank plan incomplete');
+    console.info('[bank plan]', plan.days.map((d) => `${d.n}☀️${d.lunch}/🌙${d.dinner}${d.dinnerLight ? '(سبک)' : ''}`).join(' | '));
     await savePlan(chatId, plan);
     const targets = session.planq;
     const intro = `${planIntro(mode, profile.household, targets)}\n\n${planOverview(plan, profile.household)}`;
@@ -175,33 +174,47 @@ export async function sendDayRecipes(chatId, dayN, cqId = null) {
     return;
   }
 
-  if (cqId) await answerCb(cqId, 'دارم دستورهای این روز رو می‌نویسم...');
-  // AI wallet guard (Gate 4.1.3) — per-user daily quota.
-  const quota = await aiQuota(chatId);
-  if (!quota.allowed) {
-    await sendMessage(chatId, AI_QUOTA_ALERT, MENU_ROW);
-    return;
-  }
-  const sent = await sendMessage(chatId, dayLoading(n), [
-    [{ text: '🔄 تلاش دوباره', callback_data: `retry:day:${n}` }],
-    [{ text: '🏠 منوی اصلی', callback_data: 'menu' }],
-  ]);
+  // 📚 Bank-first day recipes: both dishes come straight from the book corpus
+  // by plan name (plan days are bank dishes); a same-category neighbour covers
+  // any dish the corpus does not know (e.g. plans saved by an older version).
   try {
     const profile = await getProfile(chatId);
     const session = (await getSession(chatId)) ?? {};
     const ctx = await buildAiContext(chatId, profile, session, {});
-    const dayRecipes = await generateDayRecipes(ctx, plan, n);
+    const day = plan.days?.find((d) => d.n === n) ?? plan.days?.[0];
+    if (!day) throw new Error('plan day missing');
+    const avoidFoods = ctx.avoidFoods ?? [];
+    const lunchR = bankRecipeByName(day.lunch) ?? bankRecipeByName(day.lunchAlt)
+      ?? nearestBankDish(day.lunch, ctx.dietKey, avoidFoods);
+    const dinnerR = bankRecipeByName(day.dinner) ?? bankRecipeByName(day.dinnerAlt)
+      ?? nearestBankDish(day.dinner, ctx.dietKey, avoidFoods);
+    if (!lunchR || !dinnerR) throw new Error('bank day dishes missing');
+    const dayRecipes = {
+      lunch: bankRecipe(lunchR, { household: profile?.household }),
+      dinner: bankRecipe(dinnerR, { household: profile?.household }),
+    };
     recipesMap[String(n)] = dayRecipes;
     await savePlan(chatId, { ...plan, recipes: recipesMap });
     // Register the day's dishes so the 14-day no-repeat window covers them.
     await addHistoryMany(chatId, [dayRecipes.lunch.name, dayRecipes.dinner.name], 'plan');
-    await sendDayCards(chatId, n, dayRecipes, sent?.message_id ?? null, plan.days?.find((d) => d.n === n) ?? null);
+    await sendDayCards(chatId, n, dayRecipes, null, day);
   } catch (e) {
     console.error(`sendDayRecipes day ${n} failed:`, e?.message ?? e);
     const errorKb = [[{ text: '🔄 تلاش دوباره', callback_data: `retry:day:${n}` }], [{ text: '🏠 منوی اصلی', callback_data: 'menu' }]];
-    if (sent?.message_id) await editMessageText(chatId, sent.message_id, RECIPE_PARSE_ERROR, errorKb);
-    else await sendMessage(chatId, RECIPE_PARSE_ERROR, errorKb);
+    await sendMessage(chatId, RECIPE_PARSE_ERROR, errorKb);
   }
+}
+
+/** Pick a bank dish of the same protein class as the planned dish name. */
+function nearestBankDish(name, diet, avoidFoods) {
+  const FISH = /ماهی|میگو|قزل|سالمون/;
+  const CHICK = /مرغ|جوجه|بوقلمون/;
+  const MEAT = /گوشت|قیمه|قورمه|کباب|کوفته|استیک/;
+  const protein = FISH.test(name) ? 'fish' : CHICK.test(name) ? 'chicken' : MEAT.test(name) ? 'meat' : null;
+  const cands = pickCandidates({ diet, avoidFoods, count: 1, mealOnly: true })
+    ?? [];
+  if (cands.length) return cands[0];
+  return null;
 }
 
 async function sendDayCards(chatId, n, dayRecipes, loadingMessageId = null, planDay = null) {
@@ -237,11 +250,17 @@ export async function sendShoppingList(chatId, cqId) {
   const needsGen = !Array.isArray(plan.shoppingList) || plan.shoppingList.length === 0;
   if (cqId) await answerCb(cqId, needsGen ? 'دارم لیست خرید رو می‌چینم... 🛒' : undefined);
   if (needsGen) {
+    // 📚 Bank-first: the categorized list is assembled deterministically from
+    // the book corpus ingredients of the planned dishes — instant & reliable.
     try {
       const profile = await getProfile(chatId);
       const session = (await getSession(chatId)) ?? {};
       const ctx = await buildAiContext(chatId, profile, session, {});
-      const shoppingList = await generateShoppingList(ctx, plan);
+      const shoppingList = buildBankShoppingList(plan, {
+        household: profile?.household ?? 2,
+        items: ctx.items ?? [],
+      });
+      if (!Array.isArray(shoppingList) || shoppingList.length === 0) throw new Error('empty shopping list');
       plan.shoppingList = shoppingList;
       await savePlan(chatId, plan); // cached — next press sends instantly
     } catch (e) {

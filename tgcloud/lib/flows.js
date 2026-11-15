@@ -14,11 +14,11 @@ import {
   RECIPE_PARSE_ERROR,
 } from './texts.js';
 import { getProfile, setSession, getSession, addHistory, getRecentDishes, aiQuota } from './store.js';
-import { generateRecipes, generateRandom } from './ai.js';
 import { recipeCard } from './format.js';
 import { DIET_OPTIONS, SKILL_OPTIONS, FILTERS, RECIPES_PER_ROUND } from './config.js';
 import { startOnboarding } from './onboarding.js';
 import { AI_QUOTA_ALERT } from './texts.js';
+import { pickCandidates, bankRandom, bankRecipe } from './bank.js';
 
 /* ------------------------------------------------------------------ */
 /* Label helpers                                                       */
@@ -60,6 +60,8 @@ export async function buildAiContext(tgId, profile, session, { rescueItems = nul
   const ctx = {
     household: profile.household,
     dietPrompt: dietPromptOf(profile.diet),
+    dietKey: profile.diet ?? 'none',
+    filterKeys: (pantry.filters ?? []).map((f) => String(f)),
     skillPrompt: skillPromptOf(profile.skill),
     avoidFoods: avoidFoodsOf(profile),
     items: pantry.items ?? [],
@@ -107,20 +109,35 @@ export async function aiQuotaGuard(chatId, messageId) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Generate 3 tailored recipes and present the first one with
- * [✅ همینه!] / [❌ بعدی] buttons. `messageId` is the message being edited.
- * source: 'pantry' | 'rescue'
+ * Present a round of 3 book-recipe cards with [✅ همینه!] / [❌ بعدی] buttons.
+ * `messageId` is the message being edited. source: 'pantry' | 'rescue'
+ *
+ * 📚 The book bank (lib/recipeBank.js — 2,400+ recipes from the uploaded
+ * cooking books & app) is the PRIMARY source: selection is instant, never
+ * rate-limited and always a real recipe. The AI provider is only used for the
+ * weekly plan (planner.js) — its pollinations free tier enforces 1 reply /
+ * 45s per IP, far too flaky for the suggestion hot path.
  */
 export async function presentSuggestions(chatId, messageId, session, { source = 'pantry', rescueItems = [] } = {}) {
   const profile = await ensureProfile(chatId);
   if (!profile) return;
-  // AI wallet guard (Gate 4.1.3).
-  if (!(await aiQuotaGuard(chatId, messageId))) return;
   try {
     const ctx = await buildAiContext(chatId, profile, session, { rescueItems, avoid: session.avoid ?? [] });
-    const recipes = await generateRecipes(ctx, RECIPES_PER_ROUND);
+    const candidates = pickCandidates({
+      diet: ctx.dietKey,
+      avoidFoods: ctx.avoidFoods,
+      items: ctx.items,
+      rescue: ctx.rescue,
+      filters: ctx.filterKeys,
+      exclude: ctx.exclude,
+      avoid: ctx.avoid,
+      count: RECIPES_PER_ROUND,
+      mealOnly: true,
+    });
+    if (!candidates.length) throw new Error('bank empty for filters');
+    const recipes = candidates.map((r) => bankRecipe(r, { household: profile.household }));
     const names = recipes.map((r) => r.name);
-    console.info('[ai recipes]', names.join('، '));
+    console.info('[bank recipes]', names.join('، '));
     const nextSession = {
       flow: 'decide',
       source,
@@ -130,6 +147,7 @@ export async function presentSuggestions(chatId, messageId, session, { source = 
       avoid: [...(session.avoid ?? []), ...names].slice(-12),
       pantry: session.pantry ?? {},
       retryCb: 'decide',
+      fromBank: true,
     };
     await setSession(chatId, nextSession);
     const card = recipeCard(recipes[0], { household: profile.household });
@@ -229,8 +247,6 @@ export async function startRandom(chatId, messageId, cqId = null) {
   const profile = await ensureProfile(chatId, messageId);
   if (!profile) return;
   if (cqId) await answerCb(cqId);
-  // AI wallet guard (Gate 4.1.3).
-  if (!(await aiQuotaGuard(chatId, messageId))) return;
   await editMessageText(chatId, messageId, RANDOM_SPINNING, null);
   const session = (await getSession(chatId)) ?? {};
   try {
@@ -239,7 +255,16 @@ export async function startRandom(chatId, messageId, cqId = null) {
       ...(session.avoid ?? []),
     ];
     const ctx = await buildAiContext(chatId, profile, session, { avoid: [...new Set(avoid)] });
-    const { recipe, funLine } = await generateRandom(ctx);
+    // 📚 Bank-first wheel: instant, real book recipe, respects diet/avoids.
+    const r = bankRandom({
+      diet: ctx.dietKey,
+      avoidFoods: ctx.avoidFoods,
+      exclude: ctx.exclude,
+      avoid: ctx.avoid,
+    });
+    if (!r) throw new Error('bank empty');
+    const recipe = bankRecipe(r, { household: profile.household });
+    const funLine = pickFunLine(recipe.name);
     await setSession(chatId, { flow: 'random', random: { recipe, funLine }, pantry: session.pantry ?? {} });
     const card = recipeCard(recipe, { household: profile.household });
     await editMessageText(chatId, messageId, `${randomResultHeader(funLine)}\n\n${card}`, randomKb());
@@ -248,6 +273,18 @@ export async function startRandom(chatId, messageId, cqId = null) {
     await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: 'random' });
     await editMessageText(chatId, messageId, RECIPE_PARSE_ERROR, retryKb('random'));
   }
+}
+
+/* Playful one-liners for the wheel — Persian, generic, dish-agnostic. */
+const FUN_LINES = [
+  'قرعه به نام این غذا افتاد — دست به آپرون!',
+  'گردونه گفت این! نوش جان 🍽',
+  'این انتخابِ ستاره‌ها بود — امشب همین می‌پزیم!',
+  'قدم بعدی ساده‌ست: مواد روی میز، تابه روی شعله 🔥',
+  'شانس امروزت با این غذاست — امتحانش کن!',
+];
+function pickFunLine() {
+  return FUN_LINES[Math.floor(Math.random() * FUN_LINES.length)];
 }
 
 export async function randomAdd(chatId, messageId, cqId) {

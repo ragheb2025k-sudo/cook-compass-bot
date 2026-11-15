@@ -37,10 +37,10 @@ export const AI = {
   timeoutMs: 26000,
   MIN_RETRY_MS: 6000, // a corrective 2nd AI attempt needs this much budget left
   temperature: 0.85,
-  maxTokensRecipes: 2200,
-  maxTokensPlan: 1100, // phase 1 = compact 7-day skeleton (names + alts only)
-  maxTokensRandom: 1000,
-  maxTokensDay: 1500,
+  maxTokensRecipes: 1600,
+  maxTokensPlan: 900, // phase 1 = compact 7-day skeleton (names + alts only)
+  maxTokensRandom: 800,
+  maxTokensDay: 1200,
   headers: {}, // extra auth headers (none needed for pollinations / OpenRouter / Groq / Gemini)
   // referrer marks web-app traffic — pollinations gives it a steadier
   // anonymous seed (fewer 402 bursts); reasoning_effort caps thinking time.
@@ -100,6 +100,8 @@ export const RECIPES_PER_ROUND = 3;
 
 // ---------------------------------------------------------------------------
 // "What do I have at home?" — the low-friction pantry grid (3 items per row).
+// Items cover the ingredients actually used by the recipe bank (the book
+// corpus in lib/recipeBank.js) — هر مادهٔ پرکاربرد دستورهای کتاب‌ها اینجا هست.
 // Deliberately GENERIC: everyday Iranian household staples only — the stuff a
 // normal kitchen actually has (fridge + cupboard + freezer). No exotic,
 // niche or seasonal items that most homes wouldn't stock. Labels stay short
@@ -110,40 +112,49 @@ export const PANTRY_ITEMS = [
   'مرغ',
   'گوشت قرمز',
   'ماهی و تن‌ماهی',
+  'میگو',
   'سوسیس و کالباس',
   'تخم‌مرغ',
   // لبنیات
   'شیر',
   'ماست',
   'پنیر',
+  'خامه',
   'کره',
-  // کابینت — خوراکی‌های خشک
+  // کابینت — خوراکی‌های خشک و حبوبات
   'برنج',
   'ماکارونی',
+  'رشته',
   'آرد',
   'نان',
   'عدس',
   'لوبیا',
+  'لوبیا سبز',
+  'باقلا',
   'نخود',
-  'روغن',
-  'شکر',
+  'جو و بلغور',
   // سبزیجات
   'سیب‌زمینی',
   'پیاز و سیر',
   'گوجه',
   'خیار',
   'کاهو و سبزی',
+  'اسفناج و سبزی',
+  'هویج',
   'بادمجان',
-  'کدو و هویج',
+  'کدو',
+  'کرفس و تره‌فرنگی',
   'فلفل دلمه',
   'قارچ',
   // چاشنی و مکمل‌ها
   'رب گوجه',
   'کچاپ و سس',
   'لیمو و آب‌لیمو',
+  'لیمو عمانی',
   'زیتون و ترشی',
-  'عسل و مربا',
   'مغز و کشمش',
+  'عسل و مربا',
+  'ذرت کنسروی',
 ];
 
 // ---------------------------------------------------------------------------
