@@ -381,18 +381,32 @@ export function buildBankPlan({ diet = 'none', avoidFoods = [], exclude = [], ta
 /* ------------------------------------------------------------------ */
 
 const ING_CATS = [
-  [/مرغ|جوجه|گوشت|قیمه|بره|گوسفند|گوساله|استیک|بوقلمون|سوسیس|کالباس|ژامبون|دل|قلوه|جگر/, 'پروتئین'],
+  // Vegetables FIRST — compound names must not leak into protein/spice
+  // buckets: «فلفل دلمه» contains فلفل (spice) and «سبزی دلمه»/«نودل»
+  // contain دل (organ meat); first match wins.
+  [/فلفل(?: |\u200c)?دلمه|سبزی(?: |\u200c)?دلمه|فلفل سبز|فلفل داغ|فلفل کبابی|توت ?فرنگی|برگ ?گشنیز|گشنیز تازه/, 'سبزیجات و میوه'],
+  [/مرغ|جوجه|گوشت|قیمه|بره|گوسفند|گوساله|استیک|بوقلمون|سوسیس|کالباس|ژامبون|(?:^|\s)دل(?:\s|$)|قلوه|جگر|سویا/, 'پروتئین'],
   [/ماهی|میگو|تن ماهی|قزل|سالمون/, 'پروتئین'],
   [/تخم ?مرغ/, 'پروتئین'],
   [/برنج|ماکارونی|پاستا|رشته|آرد|نان|جوی|جو |بلغور|گندم|نودل|ورمه|لازانیا|بیسکویت|سمولینا/, 'حبوبات و غلات'],
-  [/عدس|لوبیا|نخود|باقلا|ماش|لپه/, 'حبوبات و غلات'],
-  [/شیر |ماست|پنیر|خامه|کشک|کره|روغن|مایونز|سرکه|آب لیمو|آبلیمو|رب|سس|زعفران|زردچوبه|دارچین|ادویه|نمک|فلفل|زیره|گلاب|شکر|قند|هل|زنجبیل|سرکه/, 'سایر'],
+  [/عدس|لوبیا|نخود|باقلا|ماش|لپه|حبوبات/, 'حبوبات و غلات'],
+  // Dairy gets its own bucket (شیر with negative lookahead so شیرینی /
+  // شیراز / plant milks don't land here — those are covered in «سایر»).
+  [/شیر(?!ینی|از| ?(?:نارگیل|بادام))|ماست|پنیر|خامه|کشک|کره(?! ?بادام)/, 'لبنیات'],
+  [/روغن|مایونز|سرکه|آب لیمو|آبلیمو|رب|سس|زعفران|زردچوبه|دارچین|ادویه|نمک|فلفل سیاه|فلفل قرمز|فلفل سفید|پودر فلفل|زیره|گلاب|شکر|قند|هل|زنجبیل|پودر گشنیز|تخم گشنیز|برگ بو|آویشن|شیرینی|شیر نارگیل|شیر بادام|کره بادام|کاری|گردو|بادام|پسته|فندق|کشمش|توت(?! ?فرنگی)|آجیل/, 'سایر'],
 ];
+
+/** Junk pseudo-ingredients from loosely parsed book recipes (section
+ *  headers like «مواد سس :») and staples everyone has — never listed.
+ *  Matched against the tight form (no spaces/ZWNJ, lowercased). */
+const SKIP_ING = /^(آب|آبجوش|آبسرد|آبجوشیده|آبیخ|موادسس|موادلازم|دستورپخت|طرزتهیه|مواددستور)($|:|‌)/;
 
 function ingCategory(name) {
   for (const [rx, cat] of ING_CATS) if (rx.test(name)) return cat;
   return 'سبزیجات و میوه';
 }
+
+export { ingCategory };
 
 /** Deterministic weekly shopping list from the bank ingredients of the
  *  planned dishes (skips dishes that are not in the corpus). */
@@ -406,7 +420,7 @@ export function buildBankShoppingList(plan, { household = 2, items = [] } = {}) 
       if (!r) continue;
       for (const [ingName, qty] of r.i ?? []) {
         const key = tight(ingName);
-        if (seen.has(key) || have.has(key)) continue;
+        if (seen.has(key) || have.has(key) || SKIP_ING.test(key)) continue;
         seen.add(key);
         const cat = ingCategory(ingName);
         if (!byCat.has(cat)) byCat.set(cat, []);
