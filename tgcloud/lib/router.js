@@ -21,7 +21,6 @@ import {
   profileView,
   HISTORY_CLEARED,
   historyClearConfirm,
-  RANDOM_SPINNING,
   RESCUE_HEADER,
   RESCUE_EMPTY_ALERT,
   RATE_LIMIT_ALERT,
@@ -300,9 +299,9 @@ async function cmdRescue(chatId, messageId = null) {
 }
 
 async function cmdRandomMessage(chatId) {
-  // Invoked via /random command — send a fresh carrier message to spin on.
-  const sent = await sendMessage(chatId, RANDOM_SPINNING, null);
-  if (sent?.message_id) await startRandom(chatId, sent.message_id, null);
+  // Invoked via /random command — the result lands as a NEW message directly
+  // (bank pick is instant; no placeholder needed, nothing gets overwritten).
+  return await startRandom(chatId, null, null);
 }
 
 async function cmdProfile(chatId, messageId, cqId = null) {

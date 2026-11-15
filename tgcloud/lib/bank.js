@@ -13,6 +13,22 @@
 
 import { RECIPE_BANK, BANK_META } from './recipeBank.js';
 
+/** Re-exported for stable-index consumers (saved.js manual-save callbacks). */
+export { RECIPE_BANK };
+
+/* ------------------------------------------------------------------ */
+/* Stable per-record index                                              */
+/*                                                                      */
+/* Every bank record gets a load-time index `_i`. Inline keyboards carry */
+/* this index in callback data (sv:save:<idx>) so a «💾 ذخیره» button on  */
+/* an OLD chat message still resolves to the exact same dish even after  */
+/* later spins replaced the session state. The bank array is static      */
+/* per deployment, so the index is stable.                              */
+/* ------------------------------------------------------------------ */
+for (let i = 0; i < RECIPE_BANK.length; i++) {
+  if (RECIPE_BANK[i]._i === undefined) RECIPE_BANK[i]._i = i;
+}
+
 /* ------------------------------------------------------------------ */
 /* Corpus protein-tag safety pass                                       */
 /* ------------------------------------------------------------------ */
@@ -316,6 +332,7 @@ export function bankRecipe(r, { household = 2 } = {}) {
   if (!r) return null;
   return {
     name: r.n,
+    bankIdx: r._i ?? null,
     category: r.c ?? '',
     timeMin: r.t ?? 40,
     difficulty: r.d ?? 'متوسط',

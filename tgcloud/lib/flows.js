@@ -3,13 +3,13 @@
 // "گردونه شانس" randomizer and the «🍽 دسته‌بندی غذاها» category browser.
 // All state round-trips through the sessions table.
 
-import { editMessageText, editMessageTextSmart, sendMessage, answerCb } from './telegram.js';
+import { editMessageText, editMessageTextSmart, sendMessageSmart, sendMessage, answerCb } from './telegram.js';
 import { decideKb, decideExhaustedKb, randomKb, catsKb, catKb, MENU_ROW } from './keyboards.js';
 import {
   decideHeader,
+  rescueDeckHeader,
   dishPicked,
   DECIDE_EXHAUSTED,
-  RANDOM_SPINNING,
   PANTRY_LOADING,
   randomResultHeader,
   RECIPE_PARSE_ERROR,
@@ -18,12 +18,13 @@ import {
   CAT_EMPTY,
 } from './texts.js';
 import { getProfile, setSession, getSession, addHistory, getRecentDishes, aiQuota } from './store.js';
-import { saveServedRecipes } from './saved.js';
 import { recipeCard } from './format.js';
 import { DIET_OPTIONS, SKILL_OPTIONS, FILTERS, RECIPES_PER_ROUND } from './config.js';
 import { startOnboarding } from './onboarding.js';
 import { AI_QUOTA_ALERT } from './texts.js';
 import { pickCandidates, bankRandom, bankRecipe, bankCatCounts, bankRandomByCategory } from './bank.js';
+import { rescueRecipesFor } from './rescue.js';
+import { saveCallbackFor } from './saved.js';
 
 /* ------------------------------------------------------------------ */
 /* Label helpers                                                       */
@@ -114,35 +115,61 @@ export async function aiQuotaGuard(chatId, messageId) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Present a round of 3 book-recipe cards with [✅ همینه!] / [❌ بعدی] buttons.
- * `messageId` is the message being edited. source: 'pantry' | 'rescue'
+ * Present a round of book-recipe cards (plus rescue ideas in rescue mode)
+ * with [✅ همینه!] / [❌ بعدی] buttons.
+ * `messageId` is the message being edited (card 1 replaces the loading
+ * placeholder); later cards are NEW messages so every served recipe STAYS
+ * in the chat (user request: nothing the bot sends ever disappears).
  *
- * 📚 The book bank (lib/recipeBank.js — 2,400+ recipes from the uploaded
- * cooking books & app) is the PRIMARY source: selection is instant, never
- * rate-limited and always a real recipe. The AI provider is only used for the
- * weekly plan (planner.js) — its pollinations free tier enforces 1 reply /
- * 45s per IP, far too flaky for the suggestion hot path.
+ * 🚑 Rescue mode: ideas come first from the leftover-rescue KB (lib/rescue.js)
+ * — cooked leftovers like «برنج پخته دیشب» never match book ingredients, so
+ * the KB is the primary source; bank recipes scored on the canonical base
+ * terms («برنج») fill the rest of the deck.
+ *
+ * 📚 The book bank (lib/recipeBank.js — 2,400+ recipes) is the PRIMARY source
+ * for pantry rounds: instant, never rate-limited, always a real recipe.
  */
 export async function presentSuggestions(chatId, messageId, session, { source = 'pantry', rescueItems = [] } = {}) {
   const profile = await ensureProfile(chatId);
   if (!profile) return;
   try {
     const ctx = await buildAiContext(chatId, profile, session, { rescueItems, avoid: session.avoid ?? [] });
-    const candidates = pickCandidates({
-      diet: ctx.dietKey,
-      avoidFoods: ctx.avoidFoods,
-      items: ctx.items,
-      rescue: ctx.rescue,
-      filters: ctx.filterKeys,
-      exclude: ctx.exclude,
-      avoid: ctx.avoid,
-      count: RECIPES_PER_ROUND,
-      mealOnly: true,
-    });
-    if (!candidates.length) throw new Error('bank empty for filters');
-    const recipes = candidates.map((r) => bankRecipe(r, { household: profile.household }));
+    let recipes = [];
+    if (source === 'rescue') {
+      const { ideas, bases } = rescueRecipesFor(rescueItems, { household: profile.household });
+      recipes.push(...ideas);
+      // Bank fill: matched on base terms; needs at least one idea OR bank hit.
+      const bankCount = ideas.length ? Math.max(1, RECIPES_PER_ROUND - ideas.length + 2) : RECIPES_PER_ROUND;
+      const candidates = pickCandidates({
+        diet: ctx.dietKey,
+        avoidFoods: ctx.avoidFoods,
+        items: ctx.items,
+        rescue: bases,
+        filters: ctx.filterKeys,
+        exclude: ctx.exclude,
+        avoid: ctx.avoid,
+        count: bankCount,
+        mealOnly: true,
+      });
+      recipes.push(...candidates.map((r) => bankRecipe(r, { household: profile.household })));
+    } else {
+      const candidates = pickCandidates({
+        diet: ctx.dietKey,
+        avoidFoods: ctx.avoidFoods,
+        items: ctx.items,
+        rescue: ctx.rescue,
+        filters: ctx.filterKeys,
+        exclude: ctx.exclude,
+        avoid: ctx.avoid,
+        count: RECIPES_PER_ROUND,
+        mealOnly: true,
+      });
+      if (!candidates.length) throw new Error('bank empty for filters');
+      recipes = candidates.map((r) => bankRecipe(r, { household: profile.household }));
+    }
+    if (!recipes.length) throw new Error('empty deck');
     const names = recipes.map((r) => r.name);
-    console.info('[bank recipes]', names.join('، '));
+    console.info('[deck recipes]', names.join('، '));
     const nextSession = {
       flow: 'decide',
       source,
@@ -156,7 +183,10 @@ export async function presentSuggestions(chatId, messageId, session, { source = 
     };
     await setSession(chatId, nextSession);
     const card = recipeCard(recipes[0], { household: profile.household });
-    await editMessageTextSmart(chatId, messageId, `${decideHeader(1, recipes.length)}\n\n${card}`, decideKb(recipes.length <= 1));
+    const header = source === 'rescue'
+      ? rescueDeckHeader(1, recipes.length)
+      : decideHeader(1, recipes.length);
+    await editMessageTextSmart(chatId, messageId, `${header}\n\n${card}`, decideKb(recipes.length <= 1, saveCallbackFor(recipes[0])));
   } catch (e) {
     console.error('presentSuggestions failed:', e?.message ?? e);
     const fallbackSession = {
@@ -174,7 +204,8 @@ function retryKb(action) {
   return [[{ text: '🔄 تلاش دوباره', callback_data: `retry:${action}` }], [{ text: '🏠 منوی اصلی', callback_data: 'menu' }]];
 }
 
-/** [❌ بعدی] — advance the decision queue. */
+/** [❌ بعدی] — advance the decision queue. Every next card is a NEW message
+ *  so the previously shown recipes stay in the chat as their own messages. */
 export async function decideNext(chatId, messageId, cqId) {
   const session = await getSession(chatId);
   if (!session || session.flow !== 'decide' || !session.recipes?.length) {
@@ -184,7 +215,7 @@ export async function decideNext(chatId, messageId, cqId) {
   const profile = await getProfile(chatId);
   const idx = Math.min(session.idx + 1, session.recipes.length - 1);
   if (session.idx >= session.recipes.length - 1) {
-    // Last card already shown → exhausted view.
+    // Last card already shown → exhausted view (in place; earlier cards stay).
     await setSession(chatId, { ...session, flow: 'decide', exhausted: true });
     await editMessageText(chatId, messageId, DECIDE_EXHAUSTED, decideExhaustedKb());
     await answerCb(cqId);
@@ -192,16 +223,19 @@ export async function decideNext(chatId, messageId, cqId) {
   }
   await setSession(chatId, { ...session, idx, exhausted: false });
   const card = recipeCard(session.recipes[idx], { household: profile?.household });
-  await editMessageTextSmart(
+  const header = session.source === 'rescue'
+    ? rescueDeckHeader(idx + 1, session.recipes.length)
+    : decideHeader(idx + 1, session.recipes.length);
+  await sendMessageSmart(
     chatId,
-    messageId,
-    `${decideHeader(idx + 1, session.recipes.length)}\n\n${card}`,
-    decideKb(idx >= session.recipes.length - 1),
+    `${header}\n\n${card}`,
+    decideKb(idx >= session.recipes.length - 1, saveCallbackFor(session.recipes[idx])),
   );
   await answerCb(cqId);
 }
 
-/** [✅ همینه!] — commit the dish to the 14-day history. */
+/** [✅ همینه!] — commit the dish to the 14-day history. NO auto-save: the
+ *  user bookmark recipes manually with 💾. The card stays as its message. */
 export async function decidePick(chatId, messageId, cqId) {
   const session = await getSession(chatId);
   if (!session || session.flow !== 'decide' || !session.recipes?.length) {
@@ -214,8 +248,6 @@ export async function decidePick(chatId, messageId, cqId) {
     timeMin: recipe.timeMin,
     difficulty: recipe.difficulty,
   });
-  // 📚 Auto-save the picked card to the permanent archive («📚 دستورهای من»).
-  await saveServedRecipes(chatId, [recipe], session.source === 'rescue' ? 'rescue' : 'decide');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: null });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
   await editMessageTextSmart(chatId, messageId, card, MENU_ROW);
@@ -250,11 +282,16 @@ export async function runRescue(chatId, messageId, items) {
 /* Randomizer — "گردونه شانس"                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Wheel spin — the result lands as a NEW message EVERY time: the previous
+ * card stays in the chat untouched, and the pressed message (menu or old
+ * card) is never overwritten (user request: spinning again must not erase
+ * the earlier recipe). Nothing is auto-saved — 💾 does that manually.
+ */
 export async function startRandom(chatId, messageId, cqId = null) {
   const profile = await ensureProfile(chatId, messageId);
   if (!profile) return;
   if (cqId) await answerCb(cqId);
-  await editMessageText(chatId, messageId, RANDOM_SPINNING, null);
   const session = (await getSession(chatId)) ?? {};
   try {
     const avoid = [
@@ -273,15 +310,13 @@ export async function startRandom(chatId, messageId, cqId = null) {
     const recipe = bankRecipe(r, { household: profile.household });
     const funLine = pickFunLine(recipe.name);
     await setSession(chatId, { flow: 'random', random: { recipe, funLine }, pantry: session.pantry ?? {} });
-    // 📚 Each spin result lands in the permanent archive too — spinning again
-    // replaces the card in chat, so the archive is its only durable copy.
-    await saveServedRecipes(chatId, [recipe], 'random');
     const card = recipeCard(recipe, { household: profile.household });
-    await editMessageTextSmart(chatId, messageId, `${randomResultHeader(funLine)}\n\n${card}`, randomKb());
+    await sendMessageSmart(chatId, `${randomResultHeader(funLine)}\n\n${card}`, randomKb(saveCallbackFor(recipe)));
   } catch (e) {
     console.error('startRandom failed:', e?.message ?? e);
     await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: 'random' });
-    await editMessageText(chatId, messageId, RECIPE_PARSE_ERROR, retryKb('random'));
+    if (messageId) await editMessageText(chatId, messageId, RECIPE_PARSE_ERROR, retryKb('random'));
+    else await sendMessage(chatId, RECIPE_PARSE_ERROR, retryKb('random'));
   }
 }
 
@@ -306,8 +341,6 @@ export async function randomAdd(chatId, messageId, cqId) {
   const profile = await getProfile(chatId);
   const { recipe } = session.random;
   await addHistory(chatId, recipe.name, 'random', { timeMin: recipe.timeMin, difficulty: recipe.difficulty });
-  // 📚 Auto-save the committed wheel pick to the permanent archive.
-  await saveServedRecipes(chatId, [recipe], 'random');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
   await editMessageTextSmart(chatId, messageId, card, MENU_ROW);
@@ -333,7 +366,9 @@ export async function openCats(chatId, messageId = null, cqId = null) {
   else await sendMessage(chatId, CATS_HEADER, catsKb(cats));
 }
 
-/** One random recipe card from category `catIdx` (bankCatCounts() order). */
+/** One random recipe card from category `catIdx` — lands as a NEW message
+ *  every time: the category picker (and previous cards) stay untouched so
+ *  the user keeps browsing without losing anything. */
 export async function openCategory(chatId, messageId, catIdx, cqId = null) {
   const profile = await ensureProfile(chatId, messageId);
   if (!profile) return;
@@ -369,10 +404,8 @@ export async function openCategory(chatId, messageId, catIdx, cqId = null) {
       pantry: session.pantry ?? {},
       retryCb: null,
     });
-    // 📚 Each served card lands in the permanent archive too.
-    await saveServedRecipes(chatId, [recipe], 'cat');
     const card = recipeCard(recipe, { household: profile.household });
-    await editMessageTextSmart(chatId, messageId, `${catPickHeader(meta.emoji, meta.cat, seen)}\n\n${card}`, catKb());
+    await sendMessageSmart(chatId, `${catPickHeader(meta.emoji, meta.cat, seen)}\n\n${card}`, catKb(saveCallbackFor(recipe)));
   } catch (e) {
     console.error('openCategory failed:', e?.message ?? e);
     await setSession(chatId, { flow: null, pantry: session.pantry ?? {}, retryCb: `cat:${catIdx}` });
@@ -391,7 +424,8 @@ export async function catNext(chatId, messageId, cqId) {
   return await openCategory(chatId, messageId, session.cat.idx, cqId);
 }
 
-/** [✅ ثبت در سابقه پخت] — commit the shown card to the 14-day history. */
+/** [✅ ثبت در سابقه پخت] — commit the shown card to the 14-day history.
+ *  No auto-save — the 💾 button on the card is the deliberate bookmark. */
 export async function catAdd(chatId, messageId, cqId) {
   const session = await getSession(chatId);
   if (!session || session.flow !== 'cat' || !session.cat?.recipe) {
@@ -401,7 +435,6 @@ export async function catAdd(chatId, messageId, cqId) {
   const profile = await getProfile(chatId);
   const recipe = session.cat.recipe;
   await addHistory(chatId, recipe.name, 'cat', { timeMin: recipe.timeMin, difficulty: recipe.difficulty });
-  await saveServedRecipes(chatId, [recipe], 'cat');
   await setSession(chatId, { flow: null, pantry: session.pantry ?? {} });
   const card = recipeCard(recipe, { household: profile?.household, pickedNote: dishPicked(recipe.name) });
   await editMessageTextSmart(chatId, messageId, card, MENU_ROW);

@@ -11,7 +11,7 @@
 // repeated, protein quotas) are enforced in lib/ai.js.
 
 import { editMessageText, editMessageTextSmart, sendMessageSmart, sendMessage, answerCb } from './telegram.js';
-import { planModeKb, planQKb, planKb, MENU_ROW } from './keyboards.js';
+import { planModeKb, planQKb, planKb, daySaveKb } from './keyboards.js';
 import {
   PLAN_Q_INTRO,
   PLAN_MODE_QUESTION,
@@ -24,7 +24,6 @@ import {
 import { getProfile, savePlan, addHistoryMany, getPlan, getSession, setSession } from './store.js';
 import { planOverview, shoppingListText, recipeCard } from './format.js';
 import { ensureProfile, buildAiContext } from './flows.js';
-import { saveServedRecipes } from './saved.js';
 import { WEEKDAYS_FA, WEEKLY_PLAN } from './config.js';
 import { esc } from './util.js';
 import { buildBankPlan, bankRecipeByName, bankRecipe, buildBankShoppingList, pickCandidates } from './bank.js';
@@ -198,9 +197,8 @@ export async function sendDayRecipes(chatId, dayN, cqId = null) {
     await savePlan(chatId, { ...plan, recipes: recipesMap });
     // Register the day's dishes so the 14-day no-repeat window covers them.
     await addHistoryMany(chatId, [dayRecipes.lunch.name, dayRecipes.dinner.name], 'plan');
-    // 📚 Auto-save the day's recipe cards to the user's permanent archive —
-    // whatever the bot sends stays available via «📚 دستورهای من».
-    await saveServedRecipes(chatId, [dayRecipes.lunch, dayRecipes.dinner], 'plan');
+    // No auto-save — the day cards carry 💾 buttons (daySaveKb) and the user
+    // decides what belongs in «📚 دستورهای من».
     await sendDayCards(chatId, n, dayRecipes, null, day);
   } catch (e) {
     console.error(`sendDayRecipes day ${n} failed:`, e?.message ?? e);
@@ -237,22 +235,24 @@ async function sendDayCards(chatId, n, dayRecipes, loadingMessageId = null, plan
   const lunchText = `${dayRecipesHeader(n)}\n\n${lunchCard}`;
   // With full (untruncated) steps the two cards together often exceed
   // Telegram's 4096-char limit — split lunch and dinner into separate
-  // messages, each one further auto-split via the smart senders.
+  // messages, each one further auto-split via the smart senders. Every
+  // card carries its own 💾 save button (sv:save:day:n:meal — stable ids).
   if (lunchText.length + dinnerCard.length <= 3900) {
     const text = `${lunchText}\n\n${dinnerCard}`;
+    const kbMarkup = daySaveKb(n, { lunch: true, dinner: true });
     if (loadingMessageId) {
-      await editMessageText(chatId, loadingMessageId, text, MENU_ROW);
+      await editMessageTextSmart(chatId, loadingMessageId, text, kbMarkup);
     } else {
-      await sendMessage(chatId, text, MENU_ROW);
+      await sendMessageSmart(chatId, text, kbMarkup);
     }
     return;
   }
   if (loadingMessageId) {
     await editMessageTextSmart(chatId, loadingMessageId, lunchText, null);
   } else {
-    await sendMessageSmart(chatId, lunchText, null);
+    await sendMessageSmart(chatId, lunchText, daySaveKb(n, { lunch: true, dinner: false }));
   }
-  await sendMessageSmart(chatId, dinnerCard, MENU_ROW);
+  await sendMessageSmart(chatId, dinnerCard, daySaveKb(n, { lunch: false, dinner: true }));
 }
 
 /** Re-send the categorized shopping list — data "pl:shop".

@@ -108,8 +108,12 @@ export async function countRecentHistory(tgId, days = HISTORY_DAYS) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Saved recipes — permanent archive of served recipe cards. Names only;
-/* cards are re-rendered from the bank. No TTL — stays for the user.   */
+/* Saved recipes — «📚 دستورهای من» — MANUAL archive. A dish lands here
+/* only when the user taps «💾 ذخیره» on a served recipe card (the save
+/* callback carries a stable bank index / rescue-idea id, so old message
+/* buttons keep working). Only the NAME is stored; cards are re-rendered
+/* fresh from lib/recipeBank.js + lib/rescue.js at open time. No TTL:
+/* entries stay until the user deletes them (per item or wipe).
 /* ------------------------------------------------------------------ */
 
 /** Insert dish names (deduped against the existing archive), oldest
@@ -140,9 +144,10 @@ export async function addSavedRecipes(tgId, dishes, source = 'decide') {
   }
 }
 
-/** Saved dishes, newest first — optional offset/limit paging. */
+/** Saved dishes, newest first — optional offset/limit paging. `id` is
+ *  included so the per-item delete callback can target a row exactly. */
 export async function getSavedRecipes(tgId, { offset = 0, limit = 100 } = {}) {
-  const rows = await db.select({ dish: savedRecipes.dish, source: savedRecipes.source })
+  const rows = await db.select({ id: savedRecipes.id, dish: savedRecipes.dish, source: savedRecipes.source })
     .from(savedRecipes)
     .where(eq(savedRecipes.tgId, tgId))
     .orderBy(desc(savedRecipes.id))
@@ -156,6 +161,18 @@ export async function countSavedRecipes(tgId) {
   const rows = await db.select({ dish: savedRecipes.dish })
     .from(savedRecipes).where(eq(savedRecipes.tgId, tgId)).all();
   return rows.length;
+}
+
+/** Per-item delete (user-driven from the archive menu). */
+export async function removeSavedRecipe(tgId, id) {
+  await db.delete(savedRecipes).where(and(eq(savedRecipes.tgId, tgId), eq(savedRecipes.id, id))).run();
+}
+
+/** Has the user already saved this dish name? */
+export async function hasSavedRecipe(tgId, dish) {
+  const rows = await db.select({ dish: savedRecipes.dish })
+    .from(savedRecipes).where(eq(savedRecipes.tgId, tgId)).all();
+  return rows.some((r) => r.dish === dish);
 }
 
 export async function clearSavedRecipes(tgId) {

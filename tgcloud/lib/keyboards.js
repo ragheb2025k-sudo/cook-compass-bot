@@ -7,9 +7,8 @@
 //   dec:next | dec:pick | dec:again
 //   rnd | rnd:again | rnd:add
 //   cat (picker) | cat:<idx> | cat:next | cat:add (category browse)
-//   pq:<field>:<n> (weekly-plan questionnaire: meat/fish/chicken/light 0..4)
-//   pl:simple | pl:batch | pl:shop | pl:cook | pl:again
-//   sv | sv:pg:<n> | sv:go:<page>:<slot> | sv:clear | sv:clear:yes (saved archive)
+//   sv | sv:pg:<n> | sv:go:<p>:<s> | sv:save:<i> | sv:save:ri:<id>
+//   sv:save:day:<n>:<meal> | sv:del:<p>:<s> | sv:delok:<p>:<s> | sv:clear[:yes]
 //   pr | pr:edit:diet | pr:edit:avoid | pr:edit:household | pr:edit:skill | pr:clearhist | pr:clearhist:yes
 //   del:yes | del:no (delete-my-data confirmation)
 //   retry
@@ -107,9 +106,12 @@ export function customIngredientsKb() {
   ]);
 }
 
-export function decideKb(isLast) {
+export function decideKb(isLast, saveCb = null) {
   const rows = [[btn('✅ همینه!', 'dec:pick'), btn(isLast ? '🏁 آخرین گزینه' : '❌ بعدی', 'dec:next')]];
-  rows.push([btn('🔄 پیشنهادهای تازه', 'dec:again')]);
+  const row2 = [];
+  if (saveCb) row2.push(btn('💾 ذخیره', saveCb));
+  row2.push(btn('🔄 پیشنهادهای تازه', 'dec:again'));
+  rows.push(row2);
   rows.push([btn('🎰 گردونه شانس', 'rnd'), btn('🏠 منوی اصلی', 'menu')]);
   return kb(rows);
 }
@@ -122,12 +124,12 @@ export function decideExhaustedKb() {
   ]);
 }
 
-export function randomKb() {
-  return kb([
-    [btn('✅ ثبت در سابقه پخت', 'rnd:add')],
-    [btn('🔄 بچرخون دوباره', 'rnd:again')],
-    [btn('🏠 منوی اصلی', 'menu')],
-  ]);
+export function randomKb(saveCb = null) {
+  const rows = [[btn('✅ ثبت در سابقه پخت', 'rnd:add')]];
+  if (saveCb) rows.push([btn('💾 ذخیره در دستورهای من', saveCb)]);
+  rows.push([btn('🔄 بچرخون دوباره', 'rnd:again')]);
+  rows.push([btn('🏠 منوی اصلی', 'menu')]);
+  return kb(rows);
 }
 
 /** Category picker — 2-per-row grid with live counts (indexes match
@@ -147,11 +149,11 @@ export function catsKb(catList) {
 }
 
 /** Category result — same shape as the wheel card: commit / next / back. */
-export function catKb() {
-  return kb([
-    [btn('✅ ثبت در سابقه پخت', 'cat:add'), btn('🔄 بعدی از این دسته', 'cat:next')],
-    [btn('📋 دسته‌بندی‌ها', 'cat'), btn('🏠 منوی اصلی', 'menu')],
-  ]);
+export function catKb(saveCb = null) {
+  const rows = [[btn('✅ ثبت در سابقه پخت', 'cat:add'), btn('🔄 بعدی از این دسته', 'cat:next')]];
+  if (saveCb) rows.push([btn('💾 ذخیره در دستورهای من', saveCb)]);
+  rows.push([btn('📋 دسته‌بندی‌ها', 'cat'), btn('🏠 منوی اصلی', 'menu')]);
+  return kb(rows);
 }
 
 export function planModeKb() {
@@ -215,6 +217,17 @@ export function rescueKb() {
   return kb([
     [btn('🏠 منوی اصلی', 'menu')],
   ]);
+}
+
+/** Day-recipes message — per-meal manual save buttons (nothing auto-saves). */
+export function daySaveKb(n, { lunch = true, dinner = true } = {}) {
+  const rows = [];
+  const mealRow = [];
+  if (lunch) mealRow.push(btn('💾 ذخیره ناهار', `sv:save:day:${n}:lunch`));
+  if (dinner) mealRow.push(btn('💾 ذخیره شام', `sv:save:day:${n}:dinner`));
+  if (mealRow.length) rows.push(mealRow);
+  rows.push([btn('🏠 منوی اصلی', 'menu')]);
+  return kb(rows);
 }
 
 /** /support — direct URL buttons to the official support channel. */
